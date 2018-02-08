@@ -10,6 +10,7 @@ public:
 
 private:
   void frame(float delta_time, float total_time);
+  void key_callback(int key, int scancode, int action, int mods);
 
 private:
   GLFWwindow* window_ { nullptr };

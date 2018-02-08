@@ -16,6 +16,13 @@ void App::run() {
     throw std::runtime_error("Could not create a window.");
   }
 
+  glfwSetWindowUserPointer(window_, this);
+
+  glfwSetKeyCallback(window_, [](GLFWwindow* window, int key, int scancode, int action, int mods) {
+    auto app = reinterpret_cast<App*>(glfwGetWindowUserPointer(window));
+    app->key_callback(key, scancode, action, mods);
+  });
+
   float time = glfwGetTime();
 
   while (!glfwWindowShouldClose(window_)) {
@@ -35,4 +42,10 @@ void App::run() {
 
 void App::frame(float delta_time, float total_time) {
 
+}
+
+void App::key_callback(int key, int scancode, int action, int mods) {
+  if (key == GLFW_KEY_ESCAPE) {
+    glfwSetWindowShouldClose(window_, GLFW_TRUE);
+  }
 }
