@@ -2,6 +2,7 @@
 
 #include <GLFW/glfw3.h>
 #include <stdexcept>
+#include "renderer/renderer.h"
 
 void App::run() {
   if (!glfwInit()) {
@@ -23,6 +24,8 @@ void App::run() {
     app->key_callback(key, scancode, action, mods);
   });
 
+  renderer_.reset(new Renderer);
+
   float time = glfwGetTime();
 
   while (!glfwWindowShouldClose(window_)) {
@@ -39,6 +42,9 @@ void App::run() {
   window_ = nullptr;
   glfwTerminate();
 }
+
+App::App() = default;
+App::~App() = default;
 
 void App::frame(float delta_time, float total_time) {
 
