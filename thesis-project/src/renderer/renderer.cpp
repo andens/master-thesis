@@ -1,6 +1,7 @@
 #include "renderer.h"
 
 #include <algorithm>
+#include <iostream>
 #include <vector>
 #include <vulkan-helpers/instance.h>
 #include <vulkan-helpers/vk_dispatch_tables.h>
@@ -9,9 +10,11 @@ Renderer::Renderer() {
   vk_globals_.reset(new vkgen::GlobalFunctions("vulkan-1.dll"));
 
   create_instance();
+  create_debug_callback();
 }
 
 Renderer::~Renderer() {
+  instance_->vkDestroyDebugReportCallbackEXT(debug_callback_, nullptr);
   instance_->vkDestroyInstance(nullptr);
 }
 
@@ -81,4 +84,21 @@ void Renderer::create_instance() {
   }
 
   instance_.reset(new vk::Instance(instance, vk_globals_.get()));
+}
+
+void Renderer::create_debug_callback() {
+  VkDebugReportCallbackCreateInfoEXT callback_info {};
+  callback_info.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
+  callback_info.pNext = nullptr;
+  callback_info.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
+  callback_info.pUserData = nullptr;
+  callback_info.pfnCallback = [](VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objectType, uint64_t object, size_t location, int32_t messageCode, const char* pLayerPrefix, const char* pMessage, void* pUserData) -> VkBool32 {
+    std::cout << pMessage << std::endl;
+    return VK_FALSE;
+  };
+
+  VkResult result = instance_->vkCreateDebugReportCallbackEXT(&callback_info, nullptr, &debug_callback_);
+  if (result != VK_SUCCESS) {
+    throw std::runtime_error("Could not create debug callback.");
+  }
 }
