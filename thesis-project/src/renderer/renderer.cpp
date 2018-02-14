@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <iostream>
 #include <vector>
+#include <vulkan-helpers/device.h>
+#include <vulkan-helpers/device_builder.h>
 #include <vulkan-helpers/instance.h>
 #include <vulkan-helpers/presentation_surface.h>
 #include <vulkan-helpers/vk_dispatch_tables.h>
@@ -13,12 +15,22 @@ Renderer::Renderer(HWND hwnd) {
   create_instance();
   create_debug_callback();
   create_surface(hwnd);
+  create_device();
 }
 
 Renderer::~Renderer() {
-  surface_.reset(nullptr);
-  instance_->vkDestroyDebugReportCallbackEXT(debug_callback_, nullptr);
-  instance_->vkDestroyInstance(nullptr);
+  if (device_->device()) {
+    device_->vkDeviceWaitIdle();
+    device_->vkDestroyDevice(nullptr);
+  }
+
+  if (instance_->instance()) {
+    surface_.reset();
+    instance_->vkDestroyDebugReportCallbackEXT(debug_callback_, nullptr);
+    instance_->vkDestroyInstance(nullptr);
+  }
+
+  vk_globals_.reset();
 }
 
 void Renderer::create_instance() {
@@ -108,4 +120,13 @@ void Renderer::create_debug_callback() {
 
 void Renderer::create_surface(HWND hwnd) {
   surface_ = vk::PresentationSurface::for_win32(hwnd, instance_);
+}
+
+void Renderer::create_device() {
+  vk::DeviceBuilder builder;
+  builder.use_extension("VK_KHR_swapchain");
+  device_ = builder.build(instance_.get());
+  graphics_queue_ = device_->graphics_queue();
+  compute_queue_ = device_->compute_queue();
+  present_queue_ = device_->present_queue();
 }
