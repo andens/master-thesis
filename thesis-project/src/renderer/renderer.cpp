@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <iostream>
 #include <vector>
+#include <vulkan-helpers/command_buffer.h>
+#include <vulkan-helpers/command_pool.h>
 #include <vulkan-helpers/device.h>
 #include <vulkan-helpers/device_builder.h>
 #include <vulkan-helpers/instance.h>
@@ -19,11 +21,14 @@ Renderer::Renderer(HWND hwnd) {
   create_surface(hwnd);
   create_device();
   create_swapchain();
+  create_command_pools_and_buffers();
 }
 
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    stable_graphics_cmd_pool_.reset();
+    transient_graphics_cmd_pool_.reset();
     swapchain_.reset();
     device_->vkDestroyDevice(nullptr);
   }
@@ -85,4 +90,12 @@ void Renderer::create_device() {
 
 void Renderer::create_swapchain() {
   swapchain_.reset(new vk::Swapchain(device_, surface_));
+}
+
+void Renderer::create_command_pools_and_buffers() {
+  stable_graphics_cmd_pool_ = vk::CommandPool::make_stable(device_->graphics_family(), device_);
+  graphics_cmd_buf_ = stable_graphics_cmd_pool_->allocate_primary();
+
+  transient_graphics_cmd_pool_ = vk::CommandPool::make_transient(device_->graphics_family(), device_);
+  blit_swapchain_cmd_buf_ = transient_graphics_cmd_pool_->allocate_primary();
 }

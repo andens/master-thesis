@@ -8,6 +8,8 @@ class GlobalFunctions;
 }
 
 namespace vk {
+class CommandBuffer;
+class CommandPool;
 class Device;
 class Instance;
 class PresentationSurface;
@@ -26,6 +28,7 @@ private:
   void create_surface(HWND hwnd);
   void create_device();
   void create_swapchain();
+  void create_command_pools_and_buffers();
 
 private:
   std::unique_ptr<vkgen::GlobalFunctions> vk_globals_;
@@ -37,4 +40,8 @@ private:
   std::shared_ptr<vk::Queue> compute_queue_;
   std::shared_ptr<vk::Queue> present_queue_;
   std::unique_ptr<vk::Swapchain> swapchain_;
+  std::shared_ptr<vk::CommandPool> stable_graphics_cmd_pool_;
+  std::shared_ptr<vk::CommandPool> transient_graphics_cmd_pool_;
+  std::shared_ptr<vk::CommandBuffer> graphics_cmd_buf_;
+  std::shared_ptr<vk::CommandBuffer> blit_swapchain_cmd_buf_;
 };
