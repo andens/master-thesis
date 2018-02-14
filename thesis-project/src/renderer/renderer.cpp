@@ -8,6 +8,7 @@
 #include <vulkan-helpers/instance.h>
 #include <vulkan-helpers/instance_builder.h>
 #include <vulkan-helpers/presentation_surface.h>
+#include <vulkan-helpers/swapchain.h>
 #include <vulkan-helpers/vk_dispatch_tables.h>
 
 Renderer::Renderer(HWND hwnd) {
@@ -17,11 +18,13 @@ Renderer::Renderer(HWND hwnd) {
   create_debug_callback();
   create_surface(hwnd);
   create_device();
+  create_swapchain();
 }
 
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    swapchain_.reset();
     device_->vkDestroyDevice(nullptr);
   }
 
@@ -78,4 +81,8 @@ void Renderer::create_device() {
   graphics_queue_ = device_->graphics_queue();
   compute_queue_ = device_->compute_queue();
   present_queue_ = device_->present_queue();
+}
+
+void Renderer::create_swapchain() {
+  swapchain_.reset(new vk::Swapchain(device_, surface_));
 }
