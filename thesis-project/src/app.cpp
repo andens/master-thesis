@@ -1,6 +1,8 @@
 #include "app.h"
 
 #include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
 #include <stdexcept>
 #include "renderer/renderer.h"
 
@@ -24,7 +26,7 @@ void App::run() {
     app->key_callback(key, scancode, action, mods);
   });
 
-  renderer_.reset(new Renderer);
+  renderer_.reset(new Renderer(glfwGetWin32Window(window_)));
 
   float time = glfwGetTime();
 

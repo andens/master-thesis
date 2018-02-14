@@ -4,16 +4,19 @@
 #include <iostream>
 #include <vector>
 #include <vulkan-helpers/instance.h>
+#include <vulkan-helpers/presentation_surface.h>
 #include <vulkan-helpers/vk_dispatch_tables.h>
 
-Renderer::Renderer() {
+Renderer::Renderer(HWND hwnd) {
   vk_globals_.reset(new vkgen::GlobalFunctions("vulkan-1.dll"));
 
   create_instance();
   create_debug_callback();
+  create_surface(hwnd);
 }
 
 Renderer::~Renderer() {
+  surface_.reset(nullptr);
   instance_->vkDestroyDebugReportCallbackEXT(debug_callback_, nullptr);
   instance_->vkDestroyInstance(nullptr);
 }
@@ -101,4 +104,8 @@ void Renderer::create_debug_callback() {
   if (result != VK_SUCCESS) {
     throw std::runtime_error("Could not create debug callback.");
   }
+}
+
+void Renderer::create_surface(HWND hwnd) {
+  surface_ = vk::PresentationSurface::for_win32(hwnd, instance_);
 }
