@@ -29,6 +29,7 @@ private:
   void create_device();
   void create_swapchain();
   void create_command_pools_and_buffers();
+  void create_render_pass();
 
 private:
   std::unique_ptr<vkgen::GlobalFunctions> vk_globals_;
@@ -44,4 +45,5 @@ private:
   std::shared_ptr<vk::CommandPool> transient_graphics_cmd_pool_;
   std::shared_ptr<vk::CommandBuffer> graphics_cmd_buf_;
   std::shared_ptr<vk::CommandBuffer> blit_swapchain_cmd_buf_;
+  VkRenderPass render_pass_ { VK_NULL_HANDLE };
 };

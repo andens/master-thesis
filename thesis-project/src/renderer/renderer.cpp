@@ -10,6 +10,7 @@
 #include <vulkan-helpers/instance.h>
 #include <vulkan-helpers/instance_builder.h>
 #include <vulkan-helpers/presentation_surface.h>
+#include <vulkan-helpers/render_pass_builder.h>
 #include <vulkan-helpers/swapchain.h>
 #include <vulkan-helpers/vk_dispatch_tables.h>
 
@@ -22,11 +23,13 @@ Renderer::Renderer(HWND hwnd) {
   create_device();
   create_swapchain();
   create_command_pools_and_buffers();
+  create_render_pass();
 }
 
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    device_->vkDestroyRenderPass(render_pass_, nullptr);
     stable_graphics_cmd_pool_.reset();
     transient_graphics_cmd_pool_.reset();
     swapchain_.reset();
@@ -98,4 +101,37 @@ void Renderer::create_command_pools_and_buffers() {
 
   transient_graphics_cmd_pool_ = vk::CommandPool::make_transient(device_->graphics_family(), device_);
   blit_swapchain_cmd_buf_ = transient_graphics_cmd_pool_->allocate_primary();
+}
+
+void Renderer::create_render_pass() {
+  vk::RenderPassBuilder builder;
+  builder.attachment(vk::RenderPassAttachment::c_clear_store(VK_FORMAT_R8G8B8A8_UNORM));
+  builder.attachment(vk::RenderPassAttachment::d_clear_store(VK_FORMAT_D24_UNORM_S8_UINT));
+  builder.graphics_subpass([](vk::Subpass& subpass) {
+    subpass.color_attachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    subpass.depth_stencil_attachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+  });
+
+  VkSubpassDependency dependency {};
+  dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+  dependency.dstSubpass = 0;
+  dependency.srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+  dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+  dependency.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+  dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+  dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+  builder.subpass_dependency(dependency);
+
+  dependency.srcSubpass = 0;
+  dependency.dstSubpass = VK_SUBPASS_EXTERNAL;
+  dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+  dependency.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+  dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+  dependency.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+  dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+  builder.subpass_dependency(dependency);
+
+  render_pass_ = builder.build(*device_);
 }
