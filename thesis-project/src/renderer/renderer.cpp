@@ -33,6 +33,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   depth_buffer_.reset(new graphics::DepthBuffer(device_.get(), render_area_.width, render_area_.height, VK_FORMAT_D32_SFLOAT, *blit_swapchain_cmd_buf_, *graphics_queue_));
   gbuffer_.reset(new graphics::deferred_shading::GBuffer(device_.get(), render_area_.width, render_area_.height));
   create_render_pass();
+  create_framebuffer();
   create_shaders();
   create_pipeline();
 }
@@ -45,6 +46,7 @@ Renderer::~Renderer() {
     device_->vkDestroyShaderModule(fullscreen_triangle_vs_, nullptr);
     device_->vkDestroyShaderModule(fill_gbuffer_vs_, nullptr);
     device_->vkDestroyShaderModule(fill_gbuffer_fs_, nullptr);
+    device_->vkDestroyFramebuffer(framebuffer_, nullptr);
     device_->vkDestroyRenderPass(gbuffer_render_pass_, nullptr);
     gbuffer_.reset();
     depth_buffer_.reset();
@@ -158,6 +160,32 @@ void Renderer::create_render_pass() {
   builder.subpass_dependency(dependency);
 
   gbuffer_render_pass_ = builder.build(*device_);
+}
+
+void Renderer::create_framebuffer() {
+  const uint32_t buf_count = static_cast<uint32_t>(graphics::deferred_shading::GBuffer::BufferTypes::BufferCount);
+
+  std::array<VkImageView, buf_count + 1> attachments = {};
+  for (uint32_t i = 0; i < buf_count; ++i) {
+    attachments[i] = gbuffer_->buffers()[i].view;
+  }
+  attachments[buf_count] = depth_buffer_->get_view();
+
+  VkFramebufferCreateInfo framebuffer_info {};
+  framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+  framebuffer_info.pNext = nullptr;
+  framebuffer_info.flags = 0;
+  framebuffer_info.renderPass = gbuffer_render_pass_;
+  framebuffer_info.attachmentCount = attachments.size();
+  framebuffer_info.pAttachments = attachments.data();
+  framebuffer_info.width = gbuffer_->width();
+  framebuffer_info.height = gbuffer_->height();
+  framebuffer_info.layers = 1;
+
+  VkResult result = device_->vkCreateFramebuffer(&framebuffer_info, nullptr, &framebuffer_);
+  if (result != VK_SUCCESS) {
+    throw std::runtime_error("Could not create deferred shading framebuffer.");
+  }
 }
 
 void Renderer::create_shaders() {

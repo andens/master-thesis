@@ -38,6 +38,7 @@ private:
   void create_swapchain();
   void create_command_pools_and_buffers();
   void create_render_pass();
+  void create_framebuffer();
   void create_shaders();
   void create_pipeline();
 
@@ -59,6 +60,7 @@ private:
   std::unique_ptr<graphics::DepthBuffer> depth_buffer_;
   std::unique_ptr<graphics::deferred_shading::GBuffer> gbuffer_;
   VkRenderPass gbuffer_render_pass_ { VK_NULL_HANDLE };
+  VkFramebuffer framebuffer_ { VK_NULL_HANDLE };
   VkShaderModule fullscreen_triangle_vs_ { VK_NULL_HANDLE };
   VkShaderModule fill_gbuffer_vs_ { VK_NULL_HANDLE };
   VkShaderModule fill_gbuffer_fs_ { VK_NULL_HANDLE };
