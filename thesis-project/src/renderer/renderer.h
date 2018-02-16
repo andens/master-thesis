@@ -42,6 +42,7 @@ private:
   void create_shaders();
   void create_pipeline();
   void create_synchronization_primitives();
+  void configure_barrier_structs();
 
 private:
   VkExtent2D render_area_ { 0, 0 };
@@ -70,4 +71,6 @@ private:
   VkSemaphore image_available_semaphore_ { VK_NULL_HANDLE };
   VkSemaphore blit_swapchain_complete_ { VK_NULL_HANDLE };
   VkFence render_fence_ { VK_NULL_HANDLE };
+  VkImageMemoryBarrier present_to_transfer_barrier_ {};
+  VkImageMemoryBarrier transfer_to_present_barrier_ {};
 };

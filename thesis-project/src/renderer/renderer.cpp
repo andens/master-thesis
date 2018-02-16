@@ -37,6 +37,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   create_shaders();
   create_pipeline();
   create_synchronization_primitives();
+  configure_barrier_structs();
 }
 
 Renderer::~Renderer() {
@@ -260,4 +261,36 @@ void Renderer::create_synchronization_primitives() {
   image_available_semaphore_ = device_->create_semaphore();
   blit_swapchain_complete_ = device_->create_semaphore();
   render_fence_ = device_->create_fence(true);
+}
+
+void Renderer::configure_barrier_structs() {
+  present_to_transfer_barrier_.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  present_to_transfer_barrier_.pNext = nullptr;
+  present_to_transfer_barrier_.srcAccessMask = 0;
+  present_to_transfer_barrier_.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  present_to_transfer_barrier_.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  present_to_transfer_barrier_.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  present_to_transfer_barrier_.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  present_to_transfer_barrier_.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  present_to_transfer_barrier_.image = VK_NULL_HANDLE;
+  present_to_transfer_barrier_.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  present_to_transfer_barrier_.subresourceRange.baseMipLevel = 0;
+  present_to_transfer_barrier_.subresourceRange.levelCount = 1;
+  present_to_transfer_barrier_.subresourceRange.baseArrayLayer = 0;
+  present_to_transfer_barrier_.subresourceRange.layerCount = 1;
+
+  transfer_to_present_barrier_.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  transfer_to_present_barrier_.pNext = nullptr;
+  transfer_to_present_barrier_.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  transfer_to_present_barrier_.dstAccessMask = 0;
+  transfer_to_present_barrier_.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  transfer_to_present_barrier_.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  transfer_to_present_barrier_.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  transfer_to_present_barrier_.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  transfer_to_present_barrier_.image = VK_NULL_HANDLE;
+  transfer_to_present_barrier_.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  transfer_to_present_barrier_.subresourceRange.baseMipLevel = 0;
+  transfer_to_present_barrier_.subresourceRange.levelCount = 1;
+  transfer_to_present_barrier_.subresourceRange.baseArrayLayer = 0;
+  transfer_to_present_barrier_.subresourceRange.layerCount = 1;
 }
