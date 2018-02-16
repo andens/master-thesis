@@ -45,6 +45,8 @@ void App::run() {
   window_ = nullptr;
   glfwTerminate();
 
+  renderer_.reset(nullptr);
+
   std::cin.get();
 }
 
