@@ -30,6 +30,7 @@ private:
   void create_swapchain();
   void create_command_pools_and_buffers();
   void create_render_pass();
+  void create_shaders();
 
 private:
   std::unique_ptr<vkgen::GlobalFunctions> vk_globals_;
@@ -46,4 +47,7 @@ private:
   std::shared_ptr<vk::CommandBuffer> graphics_cmd_buf_;
   std::shared_ptr<vk::CommandBuffer> blit_swapchain_cmd_buf_;
   VkRenderPass gbuffer_render_pass_ { VK_NULL_HANDLE };
+  VkShaderModule fullscreen_triangle_vs_ { VK_NULL_HANDLE };
+  VkShaderModule fill_gbuffer_vs_ { VK_NULL_HANDLE };
+  VkShaderModule fill_gbuffer_fs_ { VK_NULL_HANDLE };
 };

@@ -1,6 +1,7 @@
 #include "renderer.h"
 
 #include <algorithm>
+#include <fstream>
 #include <iostream>
 #include <vector>
 #include <vulkan-helpers/command_buffer.h>
@@ -24,11 +25,15 @@ Renderer::Renderer(HWND hwnd) {
   create_swapchain();
   create_command_pools_and_buffers();
   create_render_pass();
+  create_shaders();
 }
 
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    device_->vkDestroyShaderModule(fullscreen_triangle_vs_, nullptr);
+    device_->vkDestroyShaderModule(fill_gbuffer_vs_, nullptr);
+    device_->vkDestroyShaderModule(fill_gbuffer_fs_, nullptr);
     device_->vkDestroyRenderPass(gbuffer_render_pass_, nullptr);
     stable_graphics_cmd_pool_.reset();
     transient_graphics_cmd_pool_.reset();
@@ -134,4 +139,37 @@ void Renderer::create_render_pass() {
   builder.subpass_dependency(dependency);
 
   gbuffer_render_pass_ = builder.build(*device_);
+}
+
+void Renderer::create_shaders() {
+  auto create_shader = [this](std::string const& shader_file, VkShaderModule& shader_module) {
+    std::ifstream file { shader_file, std::ios::ate | std::ios::binary };
+    if (!file) {
+      throw std::runtime_error("Could not open shader file.");
+    }
+
+    auto size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    auto spirv = std::unique_ptr<char[]>(new char[size]);
+
+    file.read(spirv.get(), size);
+    file.close();
+
+    VkShaderModuleCreateInfo shader_info {};
+    shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shader_info.pNext = nullptr;
+    shader_info.flags = 0;
+    shader_info.codeSize = size;
+    shader_info.pCode = reinterpret_cast<uint32_t const*>(spirv.get());
+
+    VkResult result = device_->vkCreateShaderModule(&shader_info, nullptr, &shader_module);
+    if (result != VK_SUCCESS) {
+      throw std::runtime_error("Could not create shader module.");
+    }
+  };
+
+  create_shader("shaders/fullscreen-triangle-vs.spv", fullscreen_triangle_vs_);
+  create_shader("shaders/fill-gbuffer-vs.spv", fill_gbuffer_vs_);
+  create_shader("shaders/fill-gbuffer-ps.spv", fill_gbuffer_fs_);
 }
