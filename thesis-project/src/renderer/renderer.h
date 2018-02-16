@@ -5,6 +5,10 @@
 
 namespace graphics {
 class DepthBuffer;
+
+namespace deferred_shading {
+class GBuffer;
+}
 }
 
 namespace vkgen {
@@ -53,6 +57,7 @@ private:
   std::shared_ptr<vk::CommandBuffer> graphics_cmd_buf_;
   std::shared_ptr<vk::CommandBuffer> blit_swapchain_cmd_buf_;
   std::unique_ptr<graphics::DepthBuffer> depth_buffer_;
+  std::unique_ptr<graphics::deferred_shading::GBuffer> gbuffer_;
   VkRenderPass gbuffer_render_pass_ { VK_NULL_HANDLE };
   VkShaderModule fullscreen_triangle_vs_ { VK_NULL_HANDLE };
   VkShaderModule fill_gbuffer_vs_ { VK_NULL_HANDLE };

@@ -18,6 +18,7 @@
 #include <vulkan-helpers/swapchain.h>
 #include <vulkan-helpers/vk_dispatch_tables.h>
 #include "../depth-buffer/depth_buffer.h"
+#include "../gbuffer/gbuffer.h"
 
 Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
     render_area_ { render_width, render_height } {
@@ -30,6 +31,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   create_swapchain();
   create_command_pools_and_buffers();
   depth_buffer_.reset(new graphics::DepthBuffer(device_.get(), render_area_.width, render_area_.height, VK_FORMAT_D32_SFLOAT, *blit_swapchain_cmd_buf_, *graphics_queue_));
+  gbuffer_.reset(new graphics::deferred_shading::GBuffer(device_.get(), render_area_.width, render_area_.height));
   create_render_pass();
   create_shaders();
   create_pipeline();
@@ -44,6 +46,7 @@ Renderer::~Renderer() {
     device_->vkDestroyShaderModule(fill_gbuffer_vs_, nullptr);
     device_->vkDestroyShaderModule(fill_gbuffer_fs_, nullptr);
     device_->vkDestroyRenderPass(gbuffer_render_pass_, nullptr);
+    gbuffer_.reset();
     depth_buffer_.reset();
     stable_graphics_cmd_pool_.reset();
     transient_graphics_cmd_pool_.reset();
@@ -119,12 +122,18 @@ void Renderer::create_command_pools_and_buffers() {
 }
 
 void Renderer::create_render_pass() {
+  const uint32_t buf_count = static_cast<uint32_t>(graphics::deferred_shading::GBuffer::BufferTypes::BufferCount);
+
   vk::RenderPassBuilder builder;
-  builder.attachment(vk::RenderPassAttachment::c_clear_store(VK_FORMAT_R8G8B8A8_UNORM));
+  for (uint32_t i = 0; i < buf_count; ++i) {
+    builder.attachment(vk::RenderPassAttachment::c_clear_store(gbuffer_->buffers()[i].format));
+  }
   builder.attachment(vk::RenderPassAttachment::d_clear_store(VK_FORMAT_D32_SFLOAT));
-  builder.graphics_subpass([](vk::Subpass& subpass) {
-    subpass.color_attachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    subpass.depth_stencil_attachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+  builder.graphics_subpass([buf_count](vk::Subpass& subpass) {
+    for (uint32_t i = 0; i < buf_count; ++i) {
+      subpass.color_attachment(i, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    }
+    subpass.depth_stencil_attachment(buf_count, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
   });
 
   VkSubpassDependency dependency {};
@@ -206,7 +215,7 @@ void Renderer::create_pipeline() {
   pipeline_builder.rs_fill_cull_back();
   pipeline_builder.ms_none();
   pipeline_builder.ds_enabled();
-  pipeline_builder.bs_none(1);
+  pipeline_builder.bs_none(2);
   pipeline_builder.dynamic_state({
     VK_DYNAMIC_STATE_VIEWPORT,
     VK_DYNAMIC_STATE_SCISSOR
