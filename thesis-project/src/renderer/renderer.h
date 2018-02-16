@@ -45,5 +45,5 @@ private:
   std::shared_ptr<vk::CommandPool> transient_graphics_cmd_pool_;
   std::shared_ptr<vk::CommandBuffer> graphics_cmd_buf_;
   std::shared_ptr<vk::CommandBuffer> blit_swapchain_cmd_buf_;
-  VkRenderPass render_pass_ { VK_NULL_HANDLE };
+  VkRenderPass gbuffer_render_pass_ { VK_NULL_HANDLE };
 };

@@ -29,7 +29,7 @@ Renderer::Renderer(HWND hwnd) {
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
-    device_->vkDestroyRenderPass(render_pass_, nullptr);
+    device_->vkDestroyRenderPass(gbuffer_render_pass_, nullptr);
     stable_graphics_cmd_pool_.reset();
     transient_graphics_cmd_pool_.reset();
     swapchain_.reset();
@@ -133,5 +133,5 @@ void Renderer::create_render_pass() {
 
   builder.subpass_dependency(dependency);
 
-  render_pass_ = builder.build(*device_);
+  gbuffer_render_pass_ = builder.build(*device_);
 }
