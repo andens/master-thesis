@@ -27,7 +27,7 @@ void App::run() {
     app->key_callback(key, scancode, action, mods);
   });
 
-  renderer_.reset(new Renderer(glfwGetWin32Window(window_)));
+  renderer_.reset(new Renderer(glfwGetWin32Window(window_), window_width_, window_height_));
 
   float time = glfwGetTime();
 

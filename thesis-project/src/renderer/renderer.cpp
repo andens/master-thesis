@@ -17,8 +17,10 @@
 #include <vulkan-helpers/render_pass_builder.h>
 #include <vulkan-helpers/swapchain.h>
 #include <vulkan-helpers/vk_dispatch_tables.h>
+#include "../depth-buffer/depth_buffer.h"
 
-Renderer::Renderer(HWND hwnd) {
+Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
+    render_area_ { render_width, render_height } {
   vk_globals_.reset(new vkgen::GlobalFunctions("vulkan-1.dll"));
 
   create_instance();
@@ -27,6 +29,7 @@ Renderer::Renderer(HWND hwnd) {
   create_device();
   create_swapchain();
   create_command_pools_and_buffers();
+  depth_buffer_.reset(new graphics::DepthBuffer(device_.get(), render_area_.width, render_area_.height, VK_FORMAT_D32_SFLOAT, *blit_swapchain_cmd_buf_, *graphics_queue_));
   create_render_pass();
   create_shaders();
   create_pipeline();
@@ -41,6 +44,7 @@ Renderer::~Renderer() {
     device_->vkDestroyShaderModule(fill_gbuffer_vs_, nullptr);
     device_->vkDestroyShaderModule(fill_gbuffer_fs_, nullptr);
     device_->vkDestroyRenderPass(gbuffer_render_pass_, nullptr);
+    depth_buffer_.reset();
     stable_graphics_cmd_pool_.reset();
     transient_graphics_cmd_pool_.reset();
     swapchain_.reset();
@@ -117,7 +121,7 @@ void Renderer::create_command_pools_and_buffers() {
 void Renderer::create_render_pass() {
   vk::RenderPassBuilder builder;
   builder.attachment(vk::RenderPassAttachment::c_clear_store(VK_FORMAT_R8G8B8A8_UNORM));
-  builder.attachment(vk::RenderPassAttachment::d_clear_store(VK_FORMAT_D24_UNORM_S8_UINT));
+  builder.attachment(vk::RenderPassAttachment::d_clear_store(VK_FORMAT_D32_SFLOAT));
   builder.graphics_subpass([](vk::Subpass& subpass) {
     subpass.color_attachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     subpass.depth_stencil_attachment(1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);

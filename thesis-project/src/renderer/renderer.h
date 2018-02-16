@@ -3,6 +3,10 @@
 #include <memory>
 #include <vulkan-helpers/vulkan_include.inl>
 
+namespace graphics {
+class DepthBuffer;
+}
+
 namespace vkgen {
 class GlobalFunctions;
 }
@@ -19,7 +23,7 @@ class Swapchain;
 
 class Renderer {
 public:
-  Renderer(HWND hwnd);
+  Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height);
   ~Renderer();
 
 private:
@@ -34,6 +38,7 @@ private:
   void create_pipeline();
 
 private:
+  VkExtent2D render_area_ { 0, 0 };
   std::unique_ptr<vkgen::GlobalFunctions> vk_globals_;
   std::shared_ptr<vk::Instance> instance_;
   VkDebugReportCallbackEXT debug_callback_ { VK_NULL_HANDLE };
@@ -47,6 +52,7 @@ private:
   std::shared_ptr<vk::CommandPool> transient_graphics_cmd_pool_;
   std::shared_ptr<vk::CommandBuffer> graphics_cmd_buf_;
   std::shared_ptr<vk::CommandBuffer> blit_swapchain_cmd_buf_;
+  std::unique_ptr<graphics::DepthBuffer> depth_buffer_;
   VkRenderPass gbuffer_render_pass_ { VK_NULL_HANDLE };
   VkShaderModule fullscreen_triangle_vs_ { VK_NULL_HANDLE };
   VkShaderModule fill_gbuffer_vs_ { VK_NULL_HANDLE };
