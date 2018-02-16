@@ -41,6 +41,7 @@ private:
   void create_framebuffer();
   void create_shaders();
   void create_pipeline();
+  void create_synchronization_primitives();
 
 private:
   VkExtent2D render_area_ { 0, 0 };
@@ -66,4 +67,7 @@ private:
   VkShaderModule fill_gbuffer_fs_ { VK_NULL_HANDLE };
   VkPipelineLayout gbuffer_pipeline_layout_ { VK_NULL_HANDLE };
   VkPipeline gbuffer_pipeline_ { VK_NULL_HANDLE };
+  VkSemaphore image_available_semaphore_ { VK_NULL_HANDLE };
+  VkSemaphore blit_swapchain_complete_ { VK_NULL_HANDLE };
+  VkFence render_fence_ { VK_NULL_HANDLE };
 };

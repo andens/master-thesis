@@ -1,4 +1,4 @@
-#include "renderer.h"
+﻿#include "renderer.h"
 
 #include <algorithm>
 #include <fstream>
@@ -36,11 +36,15 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   create_framebuffer();
   create_shaders();
   create_pipeline();
+  create_synchronization_primitives();
 }
 
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    device_->vkDestroyFence(render_fence_, nullptr);
+    device_->vkDestroySemaphore(blit_swapchain_complete_, nullptr);
+    device_->vkDestroySemaphore(image_available_semaphore_, nullptr);
     device_->vkDestroyPipeline(gbuffer_pipeline_, nullptr);
     device_->vkDestroyPipelineLayout(gbuffer_pipeline_layout_, nullptr);
     device_->vkDestroyShaderModule(fullscreen_triangle_vs_, nullptr);
@@ -250,4 +254,10 @@ void Renderer::create_pipeline() {
   });
 
   gbuffer_pipeline_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_);
+}
+
+void Renderer::create_synchronization_primitives() {
+  image_available_semaphore_ = device_->create_semaphore();
+  blit_swapchain_complete_ = device_->create_semaphore();
+  render_fence_ = device_->create_fence(true);
 }
