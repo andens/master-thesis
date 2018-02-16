@@ -31,6 +31,7 @@ private:
   void create_command_pools_and_buffers();
   void create_render_pass();
   void create_shaders();
+  void create_pipeline();
 
 private:
   std::unique_ptr<vkgen::GlobalFunctions> vk_globals_;
@@ -50,4 +51,6 @@ private:
   VkShaderModule fullscreen_triangle_vs_ { VK_NULL_HANDLE };
   VkShaderModule fill_gbuffer_vs_ { VK_NULL_HANDLE };
   VkShaderModule fill_gbuffer_fs_ { VK_NULL_HANDLE };
+  VkPipelineLayout gbuffer_pipeline_layout_ { VK_NULL_HANDLE };
+  VkPipeline gbuffer_pipeline_ { VK_NULL_HANDLE };
 };

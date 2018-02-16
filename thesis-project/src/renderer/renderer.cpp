@@ -10,6 +10,9 @@
 #include <vulkan-helpers/device_builder.h>
 #include <vulkan-helpers/instance.h>
 #include <vulkan-helpers/instance_builder.h>
+#include <vulkan-helpers/pipeline_builder.h>
+#include <vulkan-helpers/pipeline_layout_builder.h>
+#include <vulkan-helpers/pipeline_vertex_layout.h>
 #include <vulkan-helpers/presentation_surface.h>
 #include <vulkan-helpers/render_pass_builder.h>
 #include <vulkan-helpers/swapchain.h>
@@ -26,11 +29,14 @@ Renderer::Renderer(HWND hwnd) {
   create_command_pools_and_buffers();
   create_render_pass();
   create_shaders();
+  create_pipeline();
 }
 
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    device_->vkDestroyPipeline(gbuffer_pipeline_, nullptr);
+    device_->vkDestroyPipelineLayout(gbuffer_pipeline_layout_, nullptr);
     device_->vkDestroyShaderModule(fullscreen_triangle_vs_, nullptr);
     device_->vkDestroyShaderModule(fill_gbuffer_vs_, nullptr);
     device_->vkDestroyShaderModule(fill_gbuffer_fs_, nullptr);
@@ -172,4 +178,35 @@ void Renderer::create_shaders() {
   create_shader("shaders/fullscreen-triangle-vs.spv", fullscreen_triangle_vs_);
   create_shader("shaders/fill-gbuffer-vs.spv", fill_gbuffer_vs_);
   create_shader("shaders/fill-gbuffer-ps.spv", fill_gbuffer_fs_);
+}
+
+void Renderer::create_pipeline() {
+  vk::PipelineLayoutBuilder layout_builder;
+  // TODO: No descriptor set or push constants for now.
+  gbuffer_pipeline_layout_ = layout_builder.build(*device_);
+
+  vk::PipelineBuilder pipeline_builder;
+
+  pipeline_builder.shader_stage(VK_SHADER_STAGE_VERTEX_BIT, fill_gbuffer_vs_);
+  pipeline_builder.shader_stage(VK_SHADER_STAGE_FRAGMENT_BIT, fill_gbuffer_fs_);
+
+  pipeline_builder.vertex_layout([](auto layout) {
+    layout.stream(0, 12 + 8 + 12, VK_VERTEX_INPUT_RATE_VERTEX); // pos + tex + normal
+    layout.attribute(0, VK_FORMAT_R32G32B32_SFLOAT, 0);
+    layout.attribute(1, VK_FORMAT_R32G32_SFLOAT, 12);
+    layout.attribute(2, VK_FORMAT_R32G32B32_SFLOAT, 20);
+  });
+
+  pipeline_builder.ia_triangle_list();
+  pipeline_builder.vp_dynamic();
+  pipeline_builder.rs_fill_cull_back();
+  pipeline_builder.ms_none();
+  pipeline_builder.ds_enabled();
+  pipeline_builder.bs_none(1);
+  pipeline_builder.dynamic_state({
+    VK_DYNAMIC_STATE_VIEWPORT,
+    VK_DYNAMIC_STATE_SCISSOR
+  });
+
+  gbuffer_pipeline_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_);
 }
