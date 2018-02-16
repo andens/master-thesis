@@ -14,6 +14,7 @@
 #include <vulkan-helpers/pipeline_layout_builder.h>
 #include <vulkan-helpers/pipeline_vertex_layout.h>
 #include <vulkan-helpers/presentation_surface.h>
+#include <vulkan-helpers/queue.h>
 #include <vulkan-helpers/render_pass_builder.h>
 #include <vulkan-helpers/swapchain.h>
 #include <vulkan-helpers/vk_dispatch_tables.h>
@@ -68,6 +69,121 @@ Renderer::~Renderer() {
   }
 
   vk_globals_.reset();
+}
+
+void Renderer::render() {
+  // ┌─────────────────────────────────────────────────────────────────┐
+  // │  Swapchain image acquisition                                    │
+  // └─────────────────────────────────────────────────────────────────┘
+
+  uint32_t image_idx = ~0;
+  VkResult result = device_->vkAcquireNextImageKHR(swapchain_->get_swapchain(), UINT64_MAX, image_available_semaphore_, VK_NULL_HANDLE, &image_idx);
+  if (result != VK_SUCCESS) {
+    throw std::runtime_error("Swapchain image acquisition failed (or is suboptimal). Do something appropriate such as resizing the swapchain or whatnot.");
+  }
+
+  // ┌─────────────────────────────────────────────────────────────────┐
+  // │  Blit rendered image to the swapchain                           │
+  // └─────────────────────────────────────────────────────────────────┘
+
+  // Wait for previous frame to finish its use of the blit command buffer. When
+  // it has, we reset the fence so that we can sync again after this frame.
+  device_->vkWaitForFences(1, &render_fence_, VK_TRUE, UINT64_MAX);
+  device_->vkResetFences(1, &render_fence_);
+
+  VkCommandBufferBeginInfo begin_info {};
+  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  begin_info.pNext = nullptr;
+  begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+  begin_info.pInheritanceInfo = nullptr;
+
+  blit_swapchain_cmd_buf_->vkBeginCommandBuffer(&begin_info);
+
+  // Transition swapchain image to a layout suitable for transfer operations.
+
+  if (device_->present_family() != device_->graphics_family()) {
+    throw std::runtime_error("Present family differs from graphics family and errors may occur in the presented image. Proper ownership transfer should be done here but I won't bother if not necessary.");
+  }
+
+  present_to_transfer_barrier_.srcQueueFamilyIndex = device_->present_family();
+  present_to_transfer_barrier_.dstQueueFamilyIndex = device_->graphics_family();
+  present_to_transfer_barrier_.image = swapchain_->image(image_idx);
+
+  blit_swapchain_cmd_buf_->vkCmdPipelineBarrier(
+    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    0,
+    0, nullptr,
+    0, nullptr,
+    1, &present_to_transfer_barrier_);
+
+  // Perform actual blit.
+  // TODO: For now I just clear color, replace with gbuffer or something later
+
+  VkClearColorValue clear_color = { 1.0f, 0.58f, 0.0f, 0.0f };
+  VkImageSubresourceRange clear_range;
+  clear_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  clear_range.baseArrayLayer = 0;
+  clear_range.layerCount = 1;
+  clear_range.baseMipLevel = 0;
+  clear_range.levelCount = 1;
+  blit_swapchain_cmd_buf_->vkCmdClearColorImage(swapchain_->image(image_idx), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_color, 1, &clear_range);
+
+  // Transition swapchain image back to a presentable layout.
+
+  transfer_to_present_barrier_.srcQueueFamilyIndex = device_->graphics_family();
+  transfer_to_present_barrier_.dstQueueFamilyIndex = device_->present_family();
+  transfer_to_present_barrier_.image = swapchain_->image(image_idx);
+
+  blit_swapchain_cmd_buf_->vkCmdPipelineBarrier(
+    VK_PIPELINE_STAGE_TRANSFER_BIT,
+    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+    0,
+    0, nullptr,
+    0, nullptr,
+    1, &transfer_to_present_barrier_);
+
+  blit_swapchain_cmd_buf_->vkEndCommandBuffer();
+
+  // Submit the blit command buffer.
+
+  // TODO: Also deferred shading semaphore
+  std::array<VkSemaphore, 1> blit_wait_semaphores = { image_available_semaphore_ };
+  std::array<VkPipelineStageFlags, blit_wait_semaphores.size()> blit_wait_stages = { VK_PIPELINE_STAGE_TRANSFER_BIT };
+  {
+    VkCommandBuffer cmd_buf = blit_swapchain_cmd_buf_->command_buffer();
+    VkSubmitInfo blit_swapchain_submission {};
+    blit_swapchain_submission.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    blit_swapchain_submission.pNext = nullptr;
+    blit_swapchain_submission.waitSemaphoreCount = static_cast<uint32_t>(blit_wait_semaphores.size());
+    blit_swapchain_submission.pWaitSemaphores = blit_wait_semaphores.data();
+    blit_swapchain_submission.pWaitDstStageMask = blit_wait_stages.data();
+    blit_swapchain_submission.commandBufferCount = 1;
+    blit_swapchain_submission.pCommandBuffers = &cmd_buf;
+    blit_swapchain_submission.signalSemaphoreCount = 1;
+    blit_swapchain_submission.pSignalSemaphores = &blit_swapchain_complete_;
+    graphics_queue_->vkQueueSubmit(1, &blit_swapchain_submission, render_fence_);
+  }
+
+  // ┌─────────────────────────────────────────────────────────────────┐
+  // │  Present swapchain image                                        │
+  // └─────────────────────────────────────────────────────────────────┘
+
+  std::array<VkSwapchainKHR, 1> swapchains = { swapchain_->get_swapchain() };
+  VkPresentInfoKHR present_info {};
+  present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+  present_info.pNext = nullptr;
+  present_info.waitSemaphoreCount = 1;
+  present_info.pWaitSemaphores = &blit_swapchain_complete_;
+  present_info.swapchainCount = static_cast<uint32_t>(swapchains.size());
+  present_info.pSwapchains = swapchains.data();
+  present_info.pImageIndices = &image_idx;
+  present_info.pResults = nullptr;
+
+  result = present_queue_->vkQueuePresentKHR(&present_info);
+  if (result != VK_SUCCESS) {
+    throw std::runtime_error("Swapchain present error (or suboptimal). Do something appropriate such as resizing the swapchain or whatnot.");
+  }
 }
 
 void Renderer::create_instance() {

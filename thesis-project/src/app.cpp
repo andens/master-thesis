@@ -54,7 +54,7 @@ App::App() = default;
 App::~App() = default;
 
 void App::frame(float delta_time, float total_time) {
-
+  renderer_->render();
 }
 
 void App::key_callback(int key, int scancode, int action, int mods) {

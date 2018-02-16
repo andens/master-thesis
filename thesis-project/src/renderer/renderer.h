@@ -30,6 +30,8 @@ public:
   Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height);
   ~Renderer();
 
+  void render();
+
 private:
   void create_instance();
   void create_debug_callback();
