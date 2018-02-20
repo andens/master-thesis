@@ -44,7 +44,9 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    device_->vkDestroyFence(gbuffer_generation_fence_, nullptr);
     device_->vkDestroyFence(render_fence_, nullptr);
+    device_->vkDestroySemaphore(gbuffer_generation_complete_, nullptr);
     device_->vkDestroySemaphore(blit_swapchain_complete_, nullptr);
     device_->vkDestroySemaphore(image_available_semaphore_, nullptr);
     device_->vkDestroyPipeline(gbuffer_pipeline_, nullptr);
@@ -73,6 +75,76 @@ Renderer::~Renderer() {
 
 void Renderer::render() {
   // ┌─────────────────────────────────────────────────────────────────┐
+  // │  Generate G-buffer contents                                     │
+  // └─────────────────────────────────────────────────────────────────┘
+
+  device_->vkWaitForFences(1, &gbuffer_generation_fence_, VK_TRUE, UINT64_MAX);
+  device_->vkResetFences(1, &gbuffer_generation_fence_);
+
+  VkCommandBufferBeginInfo begin_info {};
+  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  begin_info.pNext = nullptr;
+  begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+  begin_info.pInheritanceInfo = nullptr;
+
+  graphics_cmd_buf_->vkBeginCommandBuffer(&begin_info);
+
+  // Clear values for G-buffer attachments as indicated by the subpass
+  // attachment load operations of the render pass.
+  std::array<VkClearValue, 3> clear_values {};
+  clear_values[0].color = { 0.0f, 0.58f, 1.0f, 0.0f };
+  clear_values[1].color = { 0.5f, 0.5f, 0.5f, 0.0 };
+  clear_values[2].depthStencil = { 0.0f, 0 };
+
+  VkRenderPassBeginInfo render_pass_info {};
+  render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+  render_pass_info.pNext = nullptr;
+  render_pass_info.renderPass = gbuffer_render_pass_;
+  render_pass_info.framebuffer = framebuffer_;
+  render_pass_info.renderArea = { {0, 0}, render_area_ };
+  render_pass_info.clearValueCount = static_cast<uint32_t>(clear_values.size());
+  render_pass_info.pClearValues = clear_values.data();
+
+  graphics_cmd_buf_->vkCmdBeginRenderPass(&render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+
+  graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer_pipeline_);
+
+  VkViewport viewport {};
+  viewport.x = 0.0f;
+  viewport.y = 0.0f;
+  viewport.width = static_cast<float>(render_area_.width);
+  viewport.height = static_cast<float>(render_area_.height);
+  viewport.minDepth = 0.0f;
+  viewport.maxDepth = 1.0f;
+
+  VkRect2D scissor = {};
+  scissor.offset = { 0, 0 };
+  scissor.extent = render_area_;
+  
+  // Dynamic state
+  graphics_cmd_buf_->vkCmdSetViewport(0, 1, &viewport);
+  graphics_cmd_buf_->vkCmdSetScissor(0, 1, &scissor);
+
+  graphics_cmd_buf_->vkCmdDraw(3, 1, 0, 0);
+
+  graphics_cmd_buf_->vkCmdEndRenderPass();
+
+  graphics_cmd_buf_->vkEndCommandBuffer();
+
+  VkCommandBuffer cmd_buf = graphics_cmd_buf_->command_buffer();
+  VkSubmitInfo submit_info {};
+  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submit_info.pNext = nullptr;
+  submit_info.waitSemaphoreCount = 0;
+  submit_info.pWaitSemaphores = nullptr;
+  submit_info.pWaitDstStageMask = nullptr;
+  submit_info.commandBufferCount = 1;
+  submit_info.pCommandBuffers = &cmd_buf;
+  submit_info.signalSemaphoreCount = 1;
+  submit_info.pSignalSemaphores = &gbuffer_generation_complete_;
+  graphics_queue_->vkQueueSubmit(1, &submit_info, gbuffer_generation_fence_);
+
+  // ┌─────────────────────────────────────────────────────────────────┐
   // │  Swapchain image acquisition                                    │
   // └─────────────────────────────────────────────────────────────────┘
 
@@ -91,13 +163,13 @@ void Renderer::render() {
   device_->vkWaitForFences(1, &render_fence_, VK_TRUE, UINT64_MAX);
   device_->vkResetFences(1, &render_fence_);
 
-  VkCommandBufferBeginInfo begin_info {};
-  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  begin_info.pNext = nullptr;
-  begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  begin_info.pInheritanceInfo = nullptr;
+  VkCommandBufferBeginInfo begin_blit {};
+  begin_blit.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  begin_blit.pNext = nullptr;
+  begin_blit.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+  begin_blit.pInheritanceInfo = nullptr;
 
-  blit_swapchain_cmd_buf_->vkBeginCommandBuffer(&begin_info);
+  blit_swapchain_cmd_buf_->vkBeginCommandBuffer(&begin_blit);
 
   // Transition swapchain image to a layout suitable for transfer operations.
 
@@ -147,9 +219,8 @@ void Renderer::render() {
 
   // Submit the blit command buffer.
 
-  // TODO: Also deferred shading semaphore
-  std::array<VkSemaphore, 1> blit_wait_semaphores = { image_available_semaphore_ };
-  std::array<VkPipelineStageFlags, blit_wait_semaphores.size()> blit_wait_stages = { VK_PIPELINE_STAGE_TRANSFER_BIT };
+  std::array<VkSemaphore, 2> blit_wait_semaphores = { image_available_semaphore_, gbuffer_generation_complete_ };
+  std::array<VkPipelineStageFlags, blit_wait_semaphores.size()> blit_wait_stages = { VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT };
   {
     VkCommandBuffer cmd_buf = blit_swapchain_cmd_buf_->command_buffer();
     VkSubmitInfo blit_swapchain_submission {};
@@ -349,7 +420,7 @@ void Renderer::create_pipeline() {
 
   vk::PipelineBuilder pipeline_builder;
 
-  pipeline_builder.shader_stage(VK_SHADER_STAGE_VERTEX_BIT, fill_gbuffer_vs_);
+  pipeline_builder.shader_stage(VK_SHADER_STAGE_VERTEX_BIT, fullscreen_triangle_vs_);
   pipeline_builder.shader_stage(VK_SHADER_STAGE_FRAGMENT_BIT, fill_gbuffer_fs_);
 
   pipeline_builder.vertex_layout([](auto layout) {
@@ -376,7 +447,9 @@ void Renderer::create_pipeline() {
 void Renderer::create_synchronization_primitives() {
   image_available_semaphore_ = device_->create_semaphore();
   blit_swapchain_complete_ = device_->create_semaphore();
+  gbuffer_generation_complete_ = device_->create_semaphore();
   render_fence_ = device_->create_fence(true);
+  gbuffer_generation_fence_ = device_->create_fence(true);
 }
 
 void Renderer::configure_barrier_structs() {

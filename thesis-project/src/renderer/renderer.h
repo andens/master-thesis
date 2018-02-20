@@ -72,7 +72,9 @@ private:
   VkPipeline gbuffer_pipeline_ { VK_NULL_HANDLE };
   VkSemaphore image_available_semaphore_ { VK_NULL_HANDLE };
   VkSemaphore blit_swapchain_complete_ { VK_NULL_HANDLE };
+  VkSemaphore gbuffer_generation_complete_ { VK_NULL_HANDLE };
   VkFence render_fence_ { VK_NULL_HANDLE };
+  VkFence gbuffer_generation_fence_ { VK_NULL_HANDLE };
   VkImageMemoryBarrier present_to_transfer_barrier_ {};
   VkImageMemoryBarrier transfer_to_present_barrier_ {};
 };
