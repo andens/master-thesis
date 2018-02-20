@@ -190,16 +190,29 @@ void Renderer::render() {
     1, &present_to_transfer_barrier_);
 
   // Perform actual blit.
-  // TODO: For now I just clear color, replace with gbuffer or something later
 
-  VkClearColorValue clear_color = { 1.0f, 0.58f, 0.0f, 0.0f };
-  VkImageSubresourceRange clear_range;
-  clear_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  clear_range.baseArrayLayer = 0;
-  clear_range.layerCount = 1;
-  clear_range.baseMipLevel = 0;
-  clear_range.levelCount = 1;
-  blit_swapchain_cmd_buf_->vkCmdClearColorImage(swapchain_->image(image_idx), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear_color, 1, &clear_range);
+  VkImageBlit blit_region {};
+  blit_region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  blit_region.srcSubresource.mipLevel = 0;
+  blit_region.srcSubresource.baseArrayLayer = 0;
+  blit_region.srcSubresource.layerCount = 1;
+  blit_region.srcOffsets[0] = { 0, 0, 0 };
+  blit_region.srcOffsets[1] = { static_cast<int32_t>(render_area_.width), static_cast<int32_t>(render_area_.height), 1 };
+  blit_region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  blit_region.dstSubresource.mipLevel = 0;
+  blit_region.dstSubresource.baseArrayLayer = 0;
+  blit_region.dstSubresource.layerCount = 1;
+  blit_region.dstOffsets[0] = { 0, 0, 0 };
+  blit_region.dstOffsets[1] = { static_cast<int32_t>(render_area_.width), static_cast<int32_t>(render_area_.height), 1 };
+
+  blit_swapchain_cmd_buf_->vkCmdBlitImage(
+    gbuffer_->get_buf(graphics::deferred_shading::GBuffer::BufferTypes::Albedo).image,
+    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+    swapchain_->image(image_idx),
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    1, &blit_region,
+    VK_FILTER_LINEAR
+  );
 
   // Transition swapchain image back to a presentable layout.
 
