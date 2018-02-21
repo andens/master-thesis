@@ -47,3 +47,35 @@ endforeach()
 
 add_custom_target(shaders DEPENDS ${SPIRV_FILES})
 add_dependencies(thesis-project shaders)
+
+# ┌──────────────────────────────────────────────────────────────────┐
+# │  Symbolic link to assets                                         │
+# └──────────────────────────────────────────────────────────────────┘
+
+file(TO_NATIVE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/assets/" asset_source)
+file(TO_NATIVE_PATH "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/" asset_destination)
+
+# I managed to get CMake to treat the junction as output (and thus try to clean
+# it) by using add_custom_command with OUTPUT instead of TARGET,
+# add_custom_target with DEPENDS on ${asset_destination}, and adding that
+# target as a dependency of thesis-project. The problem is that CMake can't
+# remove the junction due to access denied and I can't seem to find a way to
+# override remove() to use rd for that particular output artefact.
+
+if (WIN32)
+  add_custom_command(
+    TARGET thesis-project POST_BUILD
+    COMMAND rd ${asset_destination} 2> nul & mklink /J ${asset_destination} ${asset_source}
+    DEPENDS ${asset_destination}
+    COMMENT "Symbolic link: ${asset_source} => ${asset_destination}"
+  )
+else()
+  add_custom_command(
+    TARGET thesis-project POST_BUILD
+    # CMAKE_COMMAND calls CMake itself with the -E flag, which tells it to do
+    # some task, here creating a symbolic link.
+    COMMAND ${CMAKE_COMMAND} -E create_symlink ${asset_source} ${asset_destination}
+    DEPENDS ${asset_destination}
+    COMMENT "Symbolic link: ${asset_source} => ${asset_destination}"
+  )
+endif()
