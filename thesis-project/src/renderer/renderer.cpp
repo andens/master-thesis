@@ -141,7 +141,7 @@ void Renderer::render() {
   VkBuffer vertex_buf = vertex_buffer_->vulkan_buffer_handle();
   VkDeviceSize offset = 0;
   graphics_cmd_buf_->vkCmdBindVertexBuffers(0, 1, &vertex_buf, &offset);
-  graphics_cmd_buf_->vkCmdDraw(3, 1, 0, 0);
+  graphics_cmd_buf_->vkCmdDraw(6, 1, 0, 0);
 
   graphics_cmd_buf_->vkCmdEndRenderPass();
 
@@ -520,25 +520,29 @@ void Renderer::configure_barrier_structs() {
 }
 
 void Renderer::create_vertex_buffer() {
-  vertex_buffer_.reset(new vk::Buffer(*device_, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 96));
-
   struct Vertex {
     DirectX::XMFLOAT3 pos;
     DirectX::XMFLOAT2 tex;
     DirectX::XMFLOAT3 nor;
   };
 
-  Vertex vertices[3] = {
-    { { 0.0f, 1.0f, 1.0f }, { 0.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
+  Vertex vertices[6] = {
+    { { -1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
+    { { 0.9f, 1.0f, 1.0f }, { 1.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
+    { { -1.0f, 0.0f, 1.0f }, { 0.0f, 1.0f }, { 0.0f, 0.0f, -1.0f } },
+
     { { 1.0f, 1.0f, 1.0f }, { 1.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
-    { { 0.0f, 0.0f, 1.0f }, { 0.0f, 1.0f }, { 0.0f, 0.0f, -1.0f } },
+    { { 1.0f, 0.0f, 1.0f }, { 1.0f, 1.0f }, { 0.0f, 0.0f, -1.0f } },
+    { { -0.9f, 0.0f, 1.0f }, { 0.0f, 1.0f }, { 0.0f, 0.0f, -1.0f } },
   };
+
+  vertex_buffer_.reset(new vk::Buffer(*device_, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(vertices)));
 
   // Temporarilly creating staging buffers like this is not the best way
   // to go, but works well enough for my purposes. My stuff will be hard-
   // coded so I know what I need, but in a propery scenario is should be
   // reused for other buffers.
-  vk::Buffer staging { *device_, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, 96 };
+  vk::Buffer staging { *device_, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, sizeof(vertices) };
 
   void* mapped_data = nullptr;
   device_->vkMapMemory(staging.vulkan_memory_handle(), 0, VK_WHOLE_SIZE, 0, &mapped_data);
@@ -566,7 +570,7 @@ void Renderer::create_vertex_buffer() {
   VkBufferCopy copy_region {};
   copy_region.srcOffset = 0;
   copy_region.dstOffset = 0;
-  copy_region.size = 96;
+  copy_region.size = sizeof(vertices);
 
   graphics_cmd_buf_->vkCmdCopyBuffer(staging.vulkan_buffer_handle(), vertex_buffer_->vulkan_buffer_handle(), 1, &copy_region);
 
