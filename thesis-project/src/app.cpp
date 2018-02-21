@@ -60,6 +60,7 @@ App::App() = default;
 App::~App() = default;
 
 void App::frame(float delta_time, float total_time) {
+  renderer_->use_matrices(camera_->View(), camera_->Proj());
   renderer_->render();
 }
 

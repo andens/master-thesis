@@ -1,5 +1,6 @@
 #pragma once
 
+#include <DirectXMath.h>
 #include <memory>
 #include <vulkan-helpers/vulkan_include.inl>
 
@@ -31,6 +32,7 @@ public:
   ~Renderer();
 
   void render();
+  void use_matrices(DirectX::CXMMATRIX view, DirectX::CXMMATRIX proj);
 
 private:
   void create_instance();
@@ -77,4 +79,7 @@ private:
   VkFence gbuffer_generation_fence_ { VK_NULL_HANDLE };
   VkImageMemoryBarrier present_to_transfer_barrier_ {};
   VkImageMemoryBarrier transfer_to_present_barrier_ {};
+
+  DirectX::XMFLOAT4X4 view_ {};
+  DirectX::XMFLOAT4X4 proj_ {};
 };

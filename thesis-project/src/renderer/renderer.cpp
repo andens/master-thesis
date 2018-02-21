@@ -39,6 +39,9 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   create_pipeline();
   create_synchronization_primitives();
   configure_barrier_structs();
+
+  DirectX::XMStoreFloat4x4(&view_, DirectX::XMMatrixIdentity());
+  DirectX::XMStoreFloat4x4(&proj_, DirectX::XMMatrixIdentity());
 }
 
 Renderer::~Renderer() {
@@ -124,6 +127,13 @@ void Renderer::render() {
   // Dynamic state
   graphics_cmd_buf_->vkCmdSetViewport(0, 1, &viewport);
   graphics_cmd_buf_->vkCmdSetScissor(0, 1, &scissor);
+
+  // TODO: This should be replaced with a proper descriptor set when the
+  // command buffer will be static. Updating the descriptor set should then
+  // be done in |use_matrices|. Don't forget to update the pipeline layout
+  // as well.
+  graphics_cmd_buf_->vkCmdPushConstants(gbuffer_pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(DirectX::XMFLOAT4X4), &view_);
+  graphics_cmd_buf_->vkCmdPushConstants(gbuffer_pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, sizeof(DirectX::XMFLOAT4X4), sizeof(DirectX::XMFLOAT4X4), &proj_);
 
   graphics_cmd_buf_->vkCmdDraw(3, 1, 0, 0);
 
@@ -268,6 +278,11 @@ void Renderer::render() {
   if (result != VK_SUCCESS) {
     throw std::runtime_error("Swapchain present error (or suboptimal). Do something appropriate such as resizing the swapchain or whatnot.");
   }
+}
+
+void Renderer::use_matrices(DirectX::CXMMATRIX view, DirectX::CXMMATRIX proj) {
+  DirectX::XMStoreFloat4x4(&view_, view);
+  DirectX::XMStoreFloat4x4(&proj_, DirectX::XMMatrixScaling(1.0f, -1.0f, 1.0f) * proj);
 }
 
 void Renderer::create_instance() {
@@ -428,12 +443,13 @@ void Renderer::create_shaders() {
 
 void Renderer::create_pipeline() {
   vk::PipelineLayoutBuilder layout_builder;
-  // TODO: No descriptor set or push constants for now.
+  // TODO: No descriptor set for now.
+  layout_builder.push_constant(VK_SHADER_STAGE_VERTEX_BIT, 0, 2 * sizeof(DirectX::XMFLOAT4X4));
   gbuffer_pipeline_layout_ = layout_builder.build(*device_);
 
   vk::PipelineBuilder pipeline_builder;
 
-  pipeline_builder.shader_stage(VK_SHADER_STAGE_VERTEX_BIT, fullscreen_triangle_vs_);
+  pipeline_builder.shader_stage(VK_SHADER_STAGE_VERTEX_BIT, fill_gbuffer_vs_);
   pipeline_builder.shader_stage(VK_SHADER_STAGE_FRAGMENT_BIT, fill_gbuffer_fs_);
 
   pipeline_builder.vertex_layout([](auto layout) {
