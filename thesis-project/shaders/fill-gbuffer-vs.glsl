@@ -19,14 +19,7 @@ layout(location = 0) out vec2 o_TexC;
 //layout(location = 1) out vec3 o_NormV;
 
 void main() {
-  //gl_Position = vec4(i_PosL, 1.0f);
-  //gl_Position = i_PosL * g_view * g_proj;
-
-  vec4 hard_coded_pos;
-  hard_coded_pos.x = (gl_VertexIndex == 1) ? 1.0f : 0.0f;
-  hard_coded_pos.y = (gl_VertexIndex == 2) ? 0.0f : 1.0f;
-  hard_coded_pos.zw = vec2(1.0f);
-  gl_Position = hard_coded_pos * g_view * g_proj;
+  gl_Position = vec4(i_PosL, 1.0f) * g_view * g_proj;
 
   o_TexC = i_TexC;
   //o_NormV = (vec4(i_NormL, 0.0f) * world_inv_trp * g_view).xyz;

@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <vulkan-helpers/buffer.h>
 #include <vulkan-helpers/command_buffer.h>
 #include <vulkan-helpers/command_pool.h>
 #include <vulkan-helpers/device.h>
@@ -39,6 +40,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   create_pipeline();
   create_synchronization_primitives();
   configure_barrier_structs();
+  create_vertex_buffer();
 
   DirectX::XMStoreFloat4x4(&view_, DirectX::XMMatrixIdentity());
   DirectX::XMStoreFloat4x4(&proj_, DirectX::XMMatrixIdentity());
@@ -47,6 +49,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    vertex_buffer_->destroy(*device_);
     device_->vkDestroyFence(gbuffer_generation_fence_, nullptr);
     device_->vkDestroyFence(render_fence_, nullptr);
     device_->vkDestroySemaphore(gbuffer_generation_complete_, nullptr);
@@ -135,6 +138,9 @@ void Renderer::render() {
   graphics_cmd_buf_->vkCmdPushConstants(gbuffer_pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(DirectX::XMFLOAT4X4), &view_);
   graphics_cmd_buf_->vkCmdPushConstants(gbuffer_pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, sizeof(DirectX::XMFLOAT4X4), sizeof(DirectX::XMFLOAT4X4), &proj_);
 
+  VkBuffer vertex_buf = vertex_buffer_->vulkan_buffer_handle();
+  VkDeviceSize offset = 0;
+  graphics_cmd_buf_->vkCmdBindVertexBuffers(0, 1, &vertex_buf, &offset);
   graphics_cmd_buf_->vkCmdDraw(3, 1, 0, 0);
 
   graphics_cmd_buf_->vkCmdEndRenderPass();
@@ -452,7 +458,7 @@ void Renderer::create_pipeline() {
   pipeline_builder.shader_stage(VK_SHADER_STAGE_VERTEX_BIT, fill_gbuffer_vs_);
   pipeline_builder.shader_stage(VK_SHADER_STAGE_FRAGMENT_BIT, fill_gbuffer_fs_);
 
-  pipeline_builder.vertex_layout([](auto layout) {
+  pipeline_builder.vertex_layout([](auto& layout) {
     layout.stream(0, 12 + 8 + 12, VK_VERTEX_INPUT_RATE_VERTEX); // pos + tex + normal
     layout.attribute(0, VK_FORMAT_R32G32B32_SFLOAT, 0);
     layout.attribute(1, VK_FORMAT_R32G32_SFLOAT, 12);
@@ -511,4 +517,74 @@ void Renderer::configure_barrier_structs() {
   transfer_to_present_barrier_.subresourceRange.levelCount = 1;
   transfer_to_present_barrier_.subresourceRange.baseArrayLayer = 0;
   transfer_to_present_barrier_.subresourceRange.layerCount = 1;
+}
+
+void Renderer::create_vertex_buffer() {
+  vertex_buffer_.reset(new vk::Buffer(*device_, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 96));
+
+  struct Vertex {
+    DirectX::XMFLOAT3 pos;
+    DirectX::XMFLOAT2 tex;
+    DirectX::XMFLOAT3 nor;
+  };
+
+  Vertex vertices[3] = {
+    { { 0.0f, 1.0f, 1.0f }, { 0.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
+    { { 1.0f, 1.0f, 1.0f }, { 1.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
+    { { 0.0f, 0.0f, 1.0f }, { 0.0f, 1.0f }, { 0.0f, 0.0f, -1.0f } },
+  };
+
+  // Temporarilly creating staging buffers like this is not the best way
+  // to go, but works well enough for my purposes. My stuff will be hard-
+  // coded so I know what I need, but in a propery scenario is should be
+  // reused for other buffers.
+  vk::Buffer staging { *device_, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, 96 };
+
+  void* mapped_data = nullptr;
+  device_->vkMapMemory(staging.vulkan_memory_handle(), 0, VK_WHOLE_SIZE, 0, &mapped_data);
+
+  memcpy(mapped_data, vertices, sizeof(vertices));
+
+  VkMappedMemoryRange flush_range {};
+  flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+  flush_range.pNext = nullptr;
+  flush_range.memory = staging.vulkan_memory_handle();
+  flush_range.offset = 0;
+  flush_range.size = VK_WHOLE_SIZE;
+  device_->vkFlushMappedMemoryRanges(1, &flush_range);
+
+  device_->vkUnmapMemory(staging.vulkan_memory_handle());
+
+  VkCommandBufferBeginInfo begin_info {};
+  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  begin_info.pNext = nullptr;
+  begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+  begin_info.pInheritanceInfo = nullptr;
+
+  graphics_cmd_buf_->vkBeginCommandBuffer(&begin_info);
+
+  VkBufferCopy copy_region {};
+  copy_region.srcOffset = 0;
+  copy_region.dstOffset = 0;
+  copy_region.size = 96;
+
+  graphics_cmd_buf_->vkCmdCopyBuffer(staging.vulkan_buffer_handle(), vertex_buffer_->vulkan_buffer_handle(), 1, &copy_region);
+
+  graphics_cmd_buf_->vkEndCommandBuffer();
+
+  VkCommandBuffer cmd_buf = graphics_cmd_buf_->command_buffer();
+  VkSubmitInfo submit_info {};
+  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submit_info.pNext = nullptr;
+  submit_info.waitSemaphoreCount = 0;
+  submit_info.pWaitSemaphores = nullptr;
+  submit_info.pWaitDstStageMask = nullptr;
+  submit_info.signalSemaphoreCount = 0;
+  submit_info.pSignalSemaphores = nullptr;
+  submit_info.commandBufferCount = 1;
+  submit_info.pCommandBuffers = &cmd_buf;
+  graphics_queue_->vkQueueSubmit(1, &submit_info, VK_NULL_HANDLE);
+  graphics_queue_->vkQueueWaitIdle();
+
+  staging.destroy(*device_);
 }

@@ -17,6 +17,7 @@ class GlobalFunctions;
 }
 
 namespace vk {
+class Buffer;
 class CommandBuffer;
 class CommandPool;
 class Device;
@@ -47,6 +48,7 @@ private:
   void create_pipeline();
   void create_synchronization_primitives();
   void configure_barrier_structs();
+  void create_vertex_buffer();
 
 private:
   VkExtent2D render_area_ { 0, 0 };
@@ -79,6 +81,8 @@ private:
   VkFence gbuffer_generation_fence_ { VK_NULL_HANDLE };
   VkImageMemoryBarrier present_to_transfer_barrier_ {};
   VkImageMemoryBarrier transfer_to_present_barrier_ {};
+
+  std::unique_ptr<vk::Buffer> vertex_buffer_;
 
   DirectX::XMFLOAT4X4 view_ {};
   DirectX::XMFLOAT4X4 proj_ {};
