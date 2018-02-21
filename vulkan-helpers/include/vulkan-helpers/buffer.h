@@ -6,16 +6,17 @@ namespace vk {
 
 class Device;
 
-class UniformBuffer {
+class Buffer {
 public:
-  UniformBuffer(Device& device, VkMemoryPropertyFlagBits memory_properties, VkDeviceSize buffer_size);
   void destroy(Device& device);
   VkBuffer vulkan_buffer_handle() const { return buffer_; }
   VkDeviceMemory vulkan_memory_handle() const { return memory_; }
 
+  Buffer(Device& device, VkBufferUsageFlags usage, VkMemoryPropertyFlagBits memory_properties, VkDeviceSize buffer_size);
+
 private:
-  UniformBuffer(UniformBuffer& other) = delete;
-  void operator=(UniformBuffer& rhs) = delete;
+  Buffer(Buffer& other) = delete;
+  void operator=(Buffer& rhs) = delete;
 
   void create_buffer(Device& device, VkDeviceSize buffer_size);
   void allocate_memory(Device& device, VkMemoryPropertyFlagBits desired_memory_properties);
