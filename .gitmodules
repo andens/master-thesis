@@ -1,3 +1,6 @@
 [submodule "externals/glfw"]
 	path = externals/glfw
 	url = https://github.com/glfw/glfw.git
+[submodule "externals/DirectXMath"]
+	path = externals/DirectXMath
+	url = https://github.com/Microsoft/DirectXMath

@@ -17,6 +17,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHc /std:c++latest")
 # ┌──────────────────────────────────────────────────────────────────┐
 # │  Load libraries                                                  │
 # └──────────────────────────────────────────────────────────────────┘
+
 # GLFW
 set(GLFW_BUILD_EXAMPLES OFF CACHE STRING "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE STRING "" FORCE)
@@ -25,6 +26,15 @@ set(GLFW_INSTALL OFF CACHE STRING "" FORCE)
 add_subdirectory(externals/glfw)
 # Include directory for those linking against glfw
 target_include_directories(glfw PUBLIC externals/glfw/include)
+
+# DirectXMath
+# INTERFACE creates no build output, but may have properties and stuff.
+add_library(directx-math INTERFACE)
+target_include_directories(directx-math INTERFACE externals/DirectXMath/Inc)
+
+# ┌──────────────────────────────────────────────────────────────────┐
+# │  Output directories and project parts                            │
+# └──────────────────────────────────────────────────────────────────┘
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build")

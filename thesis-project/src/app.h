@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 
+class Camera;
 class GLFWwindow;
 class Renderer;
 
@@ -22,4 +23,5 @@ private:
   uint32_t window_width_ { 1280 };
   uint32_t window_height_ { 720 };
   std::unique_ptr<Renderer> renderer_;
+  std::unique_ptr<Camera> camera_;
 };

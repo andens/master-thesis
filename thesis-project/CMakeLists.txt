@@ -5,11 +5,12 @@ add_executable(thesis-project ${source_files})
 # Specify library dependency for a target. This essentially builds a dependency
 # tree so that all modules that links against this module (if it was a library)
 # automatically links to its dependencies as well.
-target_link_libraries(thesis-project vulkan-helpers glfw ${GLFW_LIBRARIES})
+target_link_libraries(thesis-project vulkan-helpers glfw ${GLFW_LIBRARIES} directx-math)
 
 # ┌──────────────────────────────────────────────────────────────────┐
 # │  Shader compilation                                              │
 # └──────────────────────────────────────────────────────────────────┘
+
 message(STATUS "Creating compilation commands for shaders")
 
 macro(ADD_SHADER_COMMAND shader_file shader_stage)
