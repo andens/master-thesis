@@ -141,7 +141,7 @@ void Renderer::render() {
   VkBuffer vertex_buf = vertex_buffer_->vulkan_buffer_handle();
   VkDeviceSize offset = 0;
   graphics_cmd_buf_->vkCmdBindVertexBuffers(0, 1, &vertex_buf, &offset);
-  graphics_cmd_buf_->vkCmdDraw(6, 1, 0, 0);
+  graphics_cmd_buf_->vkCmdDraw(36, 1, 0, 0);
 
   graphics_cmd_buf_->vkCmdEndRenderPass();
 
@@ -520,34 +520,22 @@ void Renderer::configure_barrier_structs() {
 }
 
 void Renderer::create_vertex_buffer() {
-  struct Vertex {
-    DirectX::XMFLOAT3 pos;
-    DirectX::XMFLOAT2 tex;
-    DirectX::XMFLOAT3 nor;
-  };
 
-  Vertex vertices[6] = {
-    { { -1.0f, 1.0f, 1.0f }, { 0.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
-    { { 0.9f, 1.0f, 1.0f }, { 1.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
-    { { -1.0f, 0.0f, 1.0f }, { 0.0f, 1.0f }, { 0.0f, 0.0f, -1.0f } },
+  std::vector<Vertex> vertices;
+  generate_box_vertices(vertices);
 
-    { { 1.0f, 1.0f, 1.0f }, { 1.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
-    { { 1.0f, 0.0f, 1.0f }, { 1.0f, 1.0f }, { 0.0f, 0.0f, -1.0f } },
-    { { -0.9f, 0.0f, 1.0f }, { 0.0f, 1.0f }, { 0.0f, 0.0f, -1.0f } },
-  };
-
-  vertex_buffer_.reset(new vk::Buffer(*device_, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(vertices)));
+  vertex_buffer_.reset(new vk::Buffer(*device_, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(Vertex) * vertices.size()));
 
   // Temporarilly creating staging buffers like this is not the best way
   // to go, but works well enough for my purposes. My stuff will be hard-
   // coded so I know what I need, but in a propery scenario is should be
   // reused for other buffers.
-  vk::Buffer staging { *device_, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, sizeof(vertices) };
+  vk::Buffer staging { *device_, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, sizeof(Vertex) * vertices.size() };
 
   void* mapped_data = nullptr;
   device_->vkMapMemory(staging.vulkan_memory_handle(), 0, VK_WHOLE_SIZE, 0, &mapped_data);
 
-  memcpy(mapped_data, vertices, sizeof(vertices));
+  memcpy(mapped_data, vertices.data(), sizeof(Vertex) * vertices.size());
 
   VkMappedMemoryRange flush_range {};
   flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -570,7 +558,7 @@ void Renderer::create_vertex_buffer() {
   VkBufferCopy copy_region {};
   copy_region.srcOffset = 0;
   copy_region.dstOffset = 0;
-  copy_region.size = sizeof(vertices);
+  copy_region.size = sizeof(Vertex) * vertices.size();
 
   graphics_cmd_buf_->vkCmdCopyBuffer(staging.vulkan_buffer_handle(), vertex_buffer_->vulkan_buffer_handle(), 1, &copy_region);
 
@@ -591,4 +579,52 @@ void Renderer::create_vertex_buffer() {
   graphics_queue_->vkQueueWaitIdle();
 
   staging.destroy(*device_);
+}
+
+void Renderer::generate_box_vertices(std::vector<Vertex>& vertices) {
+  vertices.reserve(vertices.size() + 36);
+  vertices.insert(vertices.end(), {
+    // Front
+    { { -0.5f, -0.5f, -0.5f }, { 0.0f, 1.0f }, { 0.0f, 0.0f, -1.0f } },
+    { { -0.5f, +0.5f, -0.5f }, { 0.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
+    { { +0.5f, +0.5f, -0.5f }, { 1.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
+    { { +0.5f, +0.5f, -0.5f }, { 1.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
+    { { +0.5f, -0.5f, -0.5f }, { 1.0f, 1.0f }, { 0.0f, 0.0f, -1.0f } },
+    { { -0.5f, -0.5f, -0.5f }, { 0.0f, 1.0f }, { 0.0f, 0.0f, -1.0f } },
+    // Right
+    { { +0.5f, -0.5f, -0.5f }, { 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f } },
+    { { +0.5f, +0.5f, -0.5f }, { 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+    { { +0.5f, +0.5f, +0.5f }, { 1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+    { { +0.5f, +0.5f, +0.5f }, { 1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+    { { +0.5f, -0.5f, +0.5f }, { 1.0f, 1.0f }, { 1.0f, 0.0f, 0.0f } },
+    { { +0.5f, -0.5f, -0.5f }, { 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f } },
+    // Back
+    { { +0.5f, -0.5f, +0.5f }, { 0.0f, 1.0f }, { 0.0f, 0.0f, 1.0f } },
+    { { +0.5f, +0.5f, +0.5f }, { 0.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
+    { { -0.5f, +0.5f, +0.5f }, { 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
+    { { -0.5f, +0.5f, +0.5f }, { 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } },
+    { { -0.5f, -0.5f, +0.5f }, { 1.0f, 1.0f }, { 0.0f, 0.0f, 1.0f } },
+    { { +0.5f, -0.5f, +0.5f }, { 0.0f, 1.0f }, { 0.0f, 0.0f, 1.0f } },
+    // Left
+    { { -0.5f, -0.5f, +0.5f }, { 0.0f, 1.0f }, { -1.0f, 0.0f, 0.0f } },
+    { { -0.5f, +0.5f, +0.5f }, { 0.0f, 0.0f }, { -1.0f, 0.0f, 0.0f } },
+    { { -0.5f, +0.5f, -0.5f }, { 1.0f, 0.0f }, { -1.0f, 0.0f, 0.0f } },
+    { { -0.5f, +0.5f, -0.5f }, { 1.0f, 0.0f }, { -1.0f, 0.0f, 0.0f } },
+    { { -0.5f, -0.5f, -0.5f }, { 1.0f, 1.0f }, { -1.0f, 0.0f, 0.0f } },
+    { { -0.5f, -0.5f, +0.5f }, { 0.0f, 1.0f }, { -1.0f, 0.0f, 0.0f } },
+    // Top
+    { { -0.5f, +0.5f, -0.5f }, { 0.0f, 1.0f }, { 0.0f, 1.0f, 0.0f } },
+    { { -0.5f, +0.5f, +0.5f }, { 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+    { { +0.5f, +0.5f, +0.5f }, { 1.0f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+    { { +0.5f, +0.5f, +0.5f }, { 1.0f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+    { { +0.5f, +0.5f, -0.5f }, { 1.0f, 1.0f }, { 0.0f, 1.0f, 0.0f } },
+    { { -0.5f, +0.5f, -0.5f }, { 0.0f, 1.0f }, { 0.0f, 1.0f, 0.0f } },
+    // Bottom
+    { { -0.5f, +0.5f, +0.5f }, { 0.0f, 1.0f }, { 0.0f, -1.0f, 0.0f } },
+    { { -0.5f, +0.5f, -0.5f }, { 0.0f, 0.0f }, { 0.0f, -1.0f, 0.0f } },
+    { { +0.5f, +0.5f, -0.5f }, { 1.0f, 0.0f }, { 0.0f, -1.0f, 0.0f } },
+    { { +0.5f, +0.5f, -0.5f }, { 1.0f, 0.0f }, { 0.0f, -1.0f, 0.0f } },
+    { { +0.5f, +0.5f, +0.5f }, { 1.0f, 1.0f }, { 0.0f, -1.0f, 0.0f } },
+    { { -0.5f, +0.5f, +0.5f }, { 0.0f, 1.0f }, { 0.0f, -1.0f, 0.0f } },
+  });
 }

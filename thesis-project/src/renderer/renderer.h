@@ -2,6 +2,7 @@
 
 #include <DirectXMath.h>
 #include <memory>
+#include <vector>
 #include <vulkan-helpers/vulkan_include.inl>
 
 namespace graphics {
@@ -36,6 +37,13 @@ public:
   void use_matrices(DirectX::CXMMATRIX view, DirectX::CXMMATRIX proj);
 
 private:
+  struct Vertex {
+    DirectX::XMFLOAT3 pos;
+    DirectX::XMFLOAT2 tex;
+    DirectX::XMFLOAT3 nor;
+  };
+
+private:
   void create_instance();
   void create_debug_callback();
   void create_surface(HWND hwnd);
@@ -49,6 +57,7 @@ private:
   void create_synchronization_primitives();
   void configure_barrier_structs();
   void create_vertex_buffer();
+  void generate_box_vertices(std::vector<Vertex>& vertices);
 
 private:
   VkExtent2D render_area_ { 0, 0 };
