@@ -29,7 +29,7 @@ void App::run() {
   });
 
   camera_.reset(new Camera);
-  camera_->LookAt(DirectX::XMFLOAT3 { 0.0f, 0.0f, 0.0f }, DirectX::XMFLOAT3 { 0.0f, 0.0f, 1.0f }, DirectX::XMFLOAT3 { 0.0f, 1.0f, 0.0f });
+  camera_->LookAt(DirectX::XMFLOAT3 { 0.0f, 0.0f, -1.5f }, DirectX::XMFLOAT3 { 0.0f, 0.0f, 1.0f }, DirectX::XMFLOAT3 { 0.0f, 1.0f, 0.0f });
   camera_->UpdateViewMatrix();
   camera_->SetLens(DirectX::XMConvertToRadians(90.0f), window_width_ / static_cast<float>(window_height_), 0.1f, 1000.0f);
 

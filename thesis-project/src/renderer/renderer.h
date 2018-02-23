@@ -5,6 +5,8 @@
 #include <vector>
 #include <vulkan-helpers/vulkan_include.inl>
 
+class Mesh;
+
 namespace graphics {
 class DepthBuffer;
 
@@ -58,6 +60,8 @@ private:
   void configure_barrier_structs();
   void create_vertex_buffer();
   void generate_box_vertices(std::vector<Vertex>& vertices);
+  void load_sphere(std::vector<Vertex>& vertices);
+  void interleave_vertex_data(Mesh* mesh, std::vector<Vertex>& vertices);
 
 private:
   VkExtent2D render_area_ { 0, 0 };

@@ -21,6 +21,8 @@
 #include <vulkan-helpers/vk_dispatch_tables.h>
 #include "../depth-buffer/depth_buffer.h"
 #include "../gbuffer/gbuffer.h"
+#include "../mesh/mesh.h"
+#include "../obj-loader/obj-loader.h"
 
 Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
     render_area_ { render_width, render_height } {
@@ -141,7 +143,7 @@ void Renderer::render() {
   VkBuffer vertex_buf = vertex_buffer_->vulkan_buffer_handle();
   VkDeviceSize offset = 0;
   graphics_cmd_buf_->vkCmdBindVertexBuffers(0, 1, &vertex_buf, &offset);
-  graphics_cmd_buf_->vkCmdDraw(36, 1, 0, 0);
+  graphics_cmd_buf_->vkCmdDraw(2160, 1, 36, 0);
 
   graphics_cmd_buf_->vkCmdEndRenderPass();
 
@@ -520,9 +522,13 @@ void Renderer::configure_barrier_structs() {
 }
 
 void Renderer::create_vertex_buffer() {
+  // Here we build a single vertex buffer with various hardcoded meshes in it.
+  // For ease of implementation they all use the same vertex layout and simply
+  // duplicates vertices instead of using indices.
 
   std::vector<Vertex> vertices;
   generate_box_vertices(vertices);
+  load_sphere(vertices);
 
   vertex_buffer_.reset(new vk::Buffer(*device_, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(Vertex) * vertices.size()));
 
@@ -627,4 +633,45 @@ void Renderer::generate_box_vertices(std::vector<Vertex>& vertices) {
     { { +0.5f, -0.5f, +0.5f }, { 1.0f, 1.0f }, { 0.0f, -1.0f, 0.0f } },
     { { -0.5f, -0.5f, +0.5f }, { 0.0f, 1.0f }, { 0.0f, -1.0f, 0.0f } },
   });
+}
+
+void Renderer::load_sphere(std::vector<Vertex>& vertices) {
+  OBJLoader loader;
+  Mesh* mesh = loader.Load("assets/sphere.obj");
+  mesh->FlipPositionZ();
+  mesh->FlipNormals();
+  mesh->InvertV();
+
+  interleave_vertex_data(mesh, vertices);
+}
+
+void Renderer::interleave_vertex_data(Mesh* mesh, std::vector<Vertex>& vertices) {
+  // I don't really use the index buffer, but just duplicate vertices. This is
+  // not a particularly good way to render meshes, but the focus here is to
+  // efficiently dispatch draw calls, not the rendering itself.
+  vertices.reserve(vertices.size() + mesh->IndexCount());
+
+  auto& positions = mesh->AttributeData(mesh->FindStream(Mesh::AttributeType::Position));
+  auto position_indices = mesh->AttributeIndices(mesh->FindStream(Mesh::AttributeType::Position));
+  auto& texcoords = mesh->AttributeData(mesh->FindStream(Mesh::AttributeType::TexCoord));
+  auto texcoord_indices = mesh->AttributeIndices(mesh->FindStream(Mesh::AttributeType::TexCoord));
+  auto& normals = mesh->AttributeData(mesh->FindStream(Mesh::AttributeType::Normal));
+  auto normal_indices = mesh->AttributeIndices(mesh->FindStream(Mesh::AttributeType::Normal));
+
+  for (uint32_t vertex = 0, i = 0; i < mesh->IndexCount(); ++i) {
+    Vertex v;
+    v.pos = ((DirectX::XMFLOAT3*)positions.data())[position_indices[i]];
+    v.tex = ((DirectX::XMFLOAT2*)texcoords.data())[texcoord_indices[i]];
+    v.nor = ((DirectX::XMFLOAT3*)normals.data())[normal_indices[i]];
+    vertices.push_back(v);
+
+    // Every third vertex (triangle) we change winding order.
+    if (vertex == 2) {
+      std::swap(*vertices.rbegin(), *(vertices.rbegin() + 2));
+      vertex = 0;
+    }
+    else {
+      vertex++;
+    }
+  }
 }
