@@ -50,7 +50,7 @@ RenderJobsDescriptorSet::RenderJobsDescriptorSet(vk::Device& device, vk::Descrip
   layout_.reset(new vk::DescriptorSetLayout { device, layout_builder });
   set_ = pool.allocate(device, *layout_);
 
-  set_->write_storage_buffer(0, storage_buffer_->vulkan_buffer_handle(), 0, sizeof(VK_WHOLE_SIZE));
+  set_->write_storage_buffer(0, storage_buffer_->vulkan_buffer_handle(), 0, sizeof(RenderJobData) * max_render_jobs);
   set_->update_pending(device);
 }
 

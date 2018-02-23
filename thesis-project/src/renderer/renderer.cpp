@@ -1,6 +1,7 @@
 ﻿#include "renderer.h"
 
 #include <algorithm>
+#include <array>
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -9,6 +10,8 @@
 #include <vulkan-helpers/command_pool.h>
 #include <vulkan-helpers/descriptor_pool.h>
 #include <vulkan-helpers/descriptor_pool_builder.h>
+#include <vulkan-helpers/descriptor_set.h>
+#include <vulkan-helpers/descriptor_set_layout.h>
 #include <vulkan-helpers/device.h>
 #include <vulkan-helpers/device_builder.h>
 #include <vulkan-helpers/instance.h>
@@ -39,6 +42,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   create_command_pools_and_buffers();
   depth_buffer_.reset(new graphics::DepthBuffer(device_.get(), render_area_.width, render_area_.height, VK_FORMAT_D32_SFLOAT, *blit_swapchain_cmd_buf_, *graphics_queue_));
   gbuffer_.reset(new graphics::deferred_shading::GBuffer(device_.get(), render_area_.width, render_area_.height));
+  create_descriptor_sets();
   create_render_pass();
   create_framebuffer();
   create_shaders();
@@ -46,7 +50,6 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   create_synchronization_primitives();
   configure_barrier_structs();
   create_vertex_buffer();
-  create_descriptor_sets();
 
   DirectX::XMStoreFloat4x4(&view_, DirectX::XMMatrixIdentity());
   DirectX::XMStoreFloat4x4(&proj_, DirectX::XMMatrixIdentity());
@@ -55,8 +58,6 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
-    render_jobs_descriptor_set_->destroy(*device_);
-    descriptor_pool_->destroy(*device_);
     vertex_buffer_->destroy(*device_);
     device_->vkDestroyFence(gbuffer_generation_fence_, nullptr);
     device_->vkDestroyFence(render_fence_, nullptr);
@@ -70,6 +71,8 @@ Renderer::~Renderer() {
     device_->vkDestroyShaderModule(fill_gbuffer_fs_, nullptr);
     device_->vkDestroyFramebuffer(framebuffer_, nullptr);
     device_->vkDestroyRenderPass(gbuffer_render_pass_, nullptr);
+    render_jobs_descriptor_set_->destroy(*device_);
+    descriptor_pool_->destroy(*device_);
     gbuffer_.reset();
     depth_buffer_.reset();
     stable_graphics_cmd_pool_.reset();
@@ -139,6 +142,11 @@ void Renderer::render() {
   graphics_cmd_buf_->vkCmdSetViewport(0, 1, &viewport);
   graphics_cmd_buf_->vkCmdSetScissor(0, 1, &scissor);
 
+  std::array<VkDescriptorSet, 1> descriptor_sets = {
+    render_jobs_descriptor_set_->set().vulkan_handle()
+  };
+  graphics_cmd_buf_->vkCmdBindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer_pipeline_layout_, 0, descriptor_sets.size(), descriptor_sets.data(), 0, nullptr);
+
   // TODO: This should be replaced with a proper descriptor set when the
   // command buffer will be static. Updating the descriptor set should then
   // be done in |use_matrices|. Don't forget to update the pipeline layout
@@ -149,6 +157,7 @@ void Renderer::render() {
   VkBuffer vertex_buf = vertex_buffer_->vulkan_buffer_handle();
   VkDeviceSize offset = 0;
   graphics_cmd_buf_->vkCmdBindVertexBuffers(0, 1, &vertex_buf, &offset);
+  //graphics_cmd_buf_->vkCmdDraw(36, 1, 0, 0);
   graphics_cmd_buf_->vkCmdDraw(2160, 1, 36, 0);
 
   graphics_cmd_buf_->vkCmdEndRenderPass();
@@ -457,8 +466,8 @@ void Renderer::create_shaders() {
 
 void Renderer::create_pipeline() {
   vk::PipelineLayoutBuilder layout_builder;
-  // TODO: No descriptor set for now.
   layout_builder.push_constant(VK_SHADER_STAGE_VERTEX_BIT, 0, 2 * sizeof(DirectX::XMFLOAT4X4));
+  layout_builder.descriptor_layout(render_jobs_descriptor_set_->layout().vulkan_handle());
   gbuffer_pipeline_layout_ = layout_builder.build(*device_);
 
   vk::PipelineBuilder pipeline_builder;
@@ -689,4 +698,9 @@ void Renderer::create_descriptor_sets() {
   descriptor_pool_.reset(new vk::DescriptorPool { *device_, builder });
 
   render_jobs_descriptor_set_.reset(new RenderJobsDescriptorSet { *device_, *descriptor_pool_ });
+
+  // TODO: Hardcoded render job for now
+  render_jobs_descriptor_set_->update_data(*device_, 0, [](RenderJobsDescriptorSet::RenderJobData& data) {
+    DirectX::XMStoreFloat4x4(&data.transform, DirectX::XMMatrixTranslation(5.0f, 0.0f, 0.0f));
+  });
 }
