@@ -25,6 +25,7 @@
 #include "../gbuffer/gbuffer.h"
 #include "../mesh/mesh.h"
 #include "../obj-loader/obj-loader.h"
+#include "../render-jobs-descriptor-set/render-jobs-descriptor-set.h"
 
 Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
     render_area_ { render_width, render_height } {
@@ -45,7 +46,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   create_synchronization_primitives();
   configure_barrier_structs();
   create_vertex_buffer();
-  create_descriptor_pool();
+  create_descriptor_sets();
 
   DirectX::XMStoreFloat4x4(&view_, DirectX::XMMatrixIdentity());
   DirectX::XMStoreFloat4x4(&proj_, DirectX::XMMatrixIdentity());
@@ -54,6 +55,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    render_jobs_descriptor_set_->destroy(*device_);
     descriptor_pool_->destroy(*device_);
     vertex_buffer_->destroy(*device_);
     device_->vkDestroyFence(gbuffer_generation_fence_, nullptr);
@@ -680,9 +682,11 @@ void Renderer::interleave_vertex_data(Mesh* mesh, std::vector<Vertex>& vertices)
   }
 }
 
-void Renderer::create_descriptor_pool() {
+void Renderer::create_descriptor_sets() {
   vk::DescriptorPoolBuilder builder;
   builder.reserve(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
   builder.max_sets(1);
   descriptor_pool_.reset(new vk::DescriptorPool { *device_, builder });
+
+  render_jobs_descriptor_set_.reset(new RenderJobsDescriptorSet { *device_, *descriptor_pool_ });
 }
