@@ -7,6 +7,8 @@
 #include <vulkan-helpers/buffer.h>
 #include <vulkan-helpers/command_buffer.h>
 #include <vulkan-helpers/command_pool.h>
+#include <vulkan-helpers/descriptor_pool.h>
+#include <vulkan-helpers/descriptor_pool_builder.h>
 #include <vulkan-helpers/device.h>
 #include <vulkan-helpers/device_builder.h>
 #include <vulkan-helpers/instance.h>
@@ -43,6 +45,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   create_synchronization_primitives();
   configure_barrier_structs();
   create_vertex_buffer();
+  create_descriptor_pool();
 
   DirectX::XMStoreFloat4x4(&view_, DirectX::XMMatrixIdentity());
   DirectX::XMStoreFloat4x4(&proj_, DirectX::XMMatrixIdentity());
@@ -51,6 +54,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    descriptor_pool_->destroy(*device_);
     vertex_buffer_->destroy(*device_);
     device_->vkDestroyFence(gbuffer_generation_fence_, nullptr);
     device_->vkDestroyFence(render_fence_, nullptr);
@@ -674,4 +678,11 @@ void Renderer::interleave_vertex_data(Mesh* mesh, std::vector<Vertex>& vertices)
       vertex++;
     }
   }
+}
+
+void Renderer::create_descriptor_pool() {
+  vk::DescriptorPoolBuilder builder;
+  builder.reserve(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
+  builder.max_sets(1);
+  descriptor_pool_.reset(new vk::DescriptorPool { *device_, builder });
 }

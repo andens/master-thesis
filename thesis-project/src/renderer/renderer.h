@@ -23,6 +23,7 @@ namespace vk {
 class Buffer;
 class CommandBuffer;
 class CommandPool;
+class DescriptorPool;
 class Device;
 class Instance;
 class PresentationSurface;
@@ -62,6 +63,7 @@ private:
   void generate_box_vertices(std::vector<Vertex>& vertices);
   void load_sphere(std::vector<Vertex>& vertices);
   void interleave_vertex_data(Mesh* mesh, std::vector<Vertex>& vertices);
+  void create_descriptor_pool();
 
 private:
   VkExtent2D render_area_ { 0, 0 };
@@ -96,6 +98,8 @@ private:
   VkImageMemoryBarrier transfer_to_present_barrier_ {};
 
   std::unique_ptr<vk::Buffer> vertex_buffer_;
+
+  std::unique_ptr<vk::DescriptorPool> descriptor_pool_;
 
   DirectX::XMFLOAT4X4 view_ {};
   DirectX::XMFLOAT4X4 proj_ {};
