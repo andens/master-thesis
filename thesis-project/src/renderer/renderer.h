@@ -65,6 +65,7 @@ private:
   void load_sphere(std::vector<Vertex>& vertices);
   void interleave_vertex_data(Mesh* mesh, std::vector<Vertex>& vertices);
   void create_descriptor_sets();
+  void create_indirect_buffer();
 
 private:
   VkExtent2D render_area_ { 0, 0 };
@@ -102,6 +103,9 @@ private:
 
   std::unique_ptr<vk::DescriptorPool> descriptor_pool_;
   std::unique_ptr<RenderJobsDescriptorSet> render_jobs_descriptor_set_;
+
+  std::unique_ptr<vk::Buffer> indirect_buffer_;
+  const uint32_t max_draw_calls_ { 2000 };
 
   DirectX::XMFLOAT4X4 view_ {};
   DirectX::XMFLOAT4X4 proj_ {};
