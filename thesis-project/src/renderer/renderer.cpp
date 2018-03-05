@@ -351,6 +351,7 @@ void Renderer::create_surface(HWND hwnd) {
 void Renderer::create_device() {
   vk::DeviceBuilder builder;
   builder.use_extension("VK_KHR_swapchain");
+  builder.use_extension("VK_KHR_shader_draw_parameters");
   device_ = builder.build(instance_.get());
   graphics_queue_ = device_->graphics_queue();
   compute_queue_ = device_->compute_queue();
@@ -726,7 +727,7 @@ void Renderer::create_indirect_buffer() {
   mapped_data->vertexCount = 2160;
   mapped_data->instanceCount = 1;
   mapped_data->firstVertex = 36;
-  mapped_data->firstInstance = 1;
+  mapped_data->firstInstance = 0;
 
   VkMappedMemoryRange flush_range {};
   flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;

@@ -1,5 +1,7 @@
 #version 450
 
+#extension GL_ARB_shader_draw_parameters : require
+
 layout(row_major) uniform;
 layout(row_major) buffer;
 
@@ -28,7 +30,7 @@ layout(location = 0) out vec2 o_TexC;
 //layout(location = 1) out vec3 o_NormV;
 
 void main() {
-  gl_Position = vec4(i_PosL, 1.0f) * g_render_jobs_data[gl_InstanceIndex].transform * g_view * g_proj;
+  gl_Position = vec4(i_PosL, 1.0f) * g_render_jobs_data[gl_DrawIDARB].transform * g_view * g_proj;
 
   o_TexC = i_TexC;
   //o_NormV = (vec4(i_NormL, 0.0f) * world_inv_trp * g_view).xyz;
