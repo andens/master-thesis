@@ -31,7 +31,7 @@ void App::run() {
   camera_.reset(new Camera);
   camera_->LookAt(DirectX::XMFLOAT3 { 0.0f, 0.0f, -5.0f }, DirectX::XMFLOAT3 { 0.0f, 0.0f, 1.0f }, DirectX::XMFLOAT3 { 0.0f, 1.0f, 0.0f });
   camera_->UpdateViewMatrix();
-  camera_->SetLens(DirectX::XMConvertToRadians(90.0f), window_width_ / static_cast<float>(window_height_), 0.1f, 1000.0f);
+  camera_->SetLens(DirectX::XMConvertToRadians(90.0f), window_width_ / static_cast<float>(window_height_), 1000.0f, 0.1f);
 
   renderer_.reset(new Renderer(glfwGetWin32Window(window_), window_width_, window_height_));
 
