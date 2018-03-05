@@ -66,7 +66,8 @@ Renderer::~Renderer() {
     device_->vkDestroySemaphore(gbuffer_generation_complete_, nullptr);
     device_->vkDestroySemaphore(blit_swapchain_complete_, nullptr);
     device_->vkDestroySemaphore(image_available_semaphore_, nullptr);
-    device_->vkDestroyPipeline(gbuffer_pipeline_, nullptr);
+    device_->vkDestroyPipeline(gbuffer_pipeline_direct_, nullptr);
+    device_->vkDestroyPipeline(gbuffer_pipeline_indirect_, nullptr);
     device_->vkDestroyPipelineLayout(gbuffer_pipeline_layout_, nullptr);
     device_->vkDestroyShaderModule(fullscreen_triangle_vs_, nullptr);
     device_->vkDestroyShaderModule(fill_gbuffer_vs_, nullptr);
@@ -126,7 +127,12 @@ void Renderer::render() {
 
   graphics_cmd_buf_->vkCmdBeginRenderPass(&render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
 
-  graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer_pipeline_);
+  if (render_indirectly_) {
+    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer_pipeline_indirect_);
+  }
+  else {
+    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer_pipeline_direct_);
+  }
 
   VkViewport viewport {};
   viewport.x = 0.0f;
@@ -159,9 +165,13 @@ void Renderer::render() {
   VkBuffer vertex_buf = vertex_buffer_->vulkan_buffer_handle();
   VkDeviceSize offset = 0;
   graphics_cmd_buf_->vkCmdBindVertexBuffers(0, 1, &vertex_buf, &offset);
-  //graphics_cmd_buf_->vkCmdDraw(36, 1, 0, 0);
-  //graphics_cmd_buf_->vkCmdDraw(2160, 1, 36, 1);
-  graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, 2, sizeof(VkDrawIndirectCommand));
+  if (render_indirectly_) {
+    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, 2, sizeof(VkDrawIndirectCommand));
+  }
+  else {
+    graphics_cmd_buf_->vkCmdDraw(36, 1, 0, 0);
+    graphics_cmd_buf_->vkCmdDraw(2160, 1, 36, 1);
+  }
 
   graphics_cmd_buf_->vkCmdEndRenderPass();
 
@@ -481,7 +491,7 @@ void Renderer::create_pipeline() {
   struct SpecializationData {
     uint32_t indirect_rendering;
   } spec_data;
-  spec_data.indirect_rendering = 1;
+  spec_data.indirect_rendering = 0;
   pipeline_builder.shader_specialization_data(&spec_data, sizeof(spec_data));
   pipeline_builder.shader_specialization_map(0, 0, sizeof(SpecializationData::indirect_rendering));
 
@@ -505,7 +515,11 @@ void Renderer::create_pipeline() {
     VK_DYNAMIC_STATE_SCISSOR
   });
 
-  gbuffer_pipeline_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_);
+  gbuffer_pipeline_direct_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_);
+
+  spec_data.indirect_rendering = 1;
+
+  gbuffer_pipeline_indirect_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_);
 }
 
 void Renderer::create_synchronization_primitives() {

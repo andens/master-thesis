@@ -90,7 +90,8 @@ private:
   VkShaderModule fill_gbuffer_vs_ { VK_NULL_HANDLE };
   VkShaderModule fill_gbuffer_fs_ { VK_NULL_HANDLE };
   VkPipelineLayout gbuffer_pipeline_layout_ { VK_NULL_HANDLE };
-  VkPipeline gbuffer_pipeline_ { VK_NULL_HANDLE };
+  VkPipeline gbuffer_pipeline_direct_ { VK_NULL_HANDLE };
+  VkPipeline gbuffer_pipeline_indirect_ { VK_NULL_HANDLE };
   VkSemaphore image_available_semaphore_ { VK_NULL_HANDLE };
   VkSemaphore blit_swapchain_complete_ { VK_NULL_HANDLE };
   VkSemaphore gbuffer_generation_complete_ { VK_NULL_HANDLE };
@@ -104,6 +105,7 @@ private:
   std::unique_ptr<vk::DescriptorPool> descriptor_pool_;
   std::unique_ptr<RenderJobsDescriptorSet> render_jobs_descriptor_set_;
 
+  bool render_indirectly_ { true };
   std::unique_ptr<vk::Buffer> indirect_buffer_;
   const uint32_t max_draw_calls_ { 2000 };
 
