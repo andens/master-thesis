@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <initializer_list>
+#include <list>
 #include <memory>
 #include <vector>
 #include "vulkan_include.inl"
@@ -21,6 +22,8 @@ class PipelineVertexLayout;
 class PipelineBuilder {
 public:
   void shader_stage(VkShaderStageFlagBits stage, VkShaderModule shader);
+  void shader_specialization_data(void const* data, size_t data_size);
+  void shader_specialization_map(uint32_t constant_id, uint32_t offset, size_t size);
   // Define vertex streams, attributes, and how the attributes get data from streams.
   void vertex_layout(const std::function<void(PipelineVertexLayout&)>& definition);
   // ia: input assembly, the topology of how vertices are assembled into primitives
@@ -39,7 +42,14 @@ public:
   VkPipeline build(Device& device, VkPipelineLayout pipeline_layout, VkRenderPass render_pass);
 
 private:
+  struct ShaderSpecialization {
+    VkSpecializationInfo spec_info {};
+    std::vector<VkSpecializationMapEntry> map_entries;
+  };
+
+private:
   std::vector<VkPipelineShaderStageCreateInfo> shaders_;
+  std::list<ShaderSpecialization> shader_specializations_;
   std::unique_ptr<PipelineVertexLayout> vertex_layout_ = nullptr;
   VkPipelineInputAssemblyStateCreateInfo input_assembly_info_ = {};
   VkPipelineViewportStateCreateInfo viewport_info_ = {};

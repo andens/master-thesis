@@ -477,6 +477,14 @@ void Renderer::create_pipeline() {
   vk::PipelineBuilder pipeline_builder;
 
   pipeline_builder.shader_stage(VK_SHADER_STAGE_VERTEX_BIT, fill_gbuffer_vs_);
+
+  struct SpecializationData {
+    uint32_t indirect_rendering;
+  } spec_data;
+  spec_data.indirect_rendering = 1;
+  pipeline_builder.shader_specialization_data(&spec_data, sizeof(spec_data));
+  pipeline_builder.shader_specialization_map(0, 0, sizeof(SpecializationData::indirect_rendering));
+
   pipeline_builder.shader_stage(VK_SHADER_STAGE_FRAGMENT_BIT, fill_gbuffer_fs_);
 
   pipeline_builder.vertex_layout([](auto& layout) {

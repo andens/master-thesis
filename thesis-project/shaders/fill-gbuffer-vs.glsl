@@ -2,6 +2,8 @@
 
 #extension GL_ARB_shader_draw_parameters : require
 
+layout(constant_id = 0) const uint INDIRECT_RENDERING = 0;
+
 layout(row_major) uniform;
 layout(row_major) buffer;
 
@@ -30,7 +32,9 @@ layout(location = 0) out vec2 o_TexC;
 //layout(location = 1) out vec3 o_NormV;
 
 void main() {
-  gl_Position = vec4(i_PosL, 1.0f) * g_render_jobs_data[gl_DrawIDARB].transform * g_view * g_proj;
+  uint drawcall_index = INDIRECT_RENDERING == 1 ? gl_DrawIDARB : gl_BaseInstanceARB;
+
+  gl_Position = vec4(i_PosL, 1.0f) * g_render_jobs_data[drawcall_index].transform * g_view * g_proj;
 
   o_TexC = i_TexC;
   //o_NormV = (vec4(i_NormL, 0.0f) * world_inv_trp * g_view).xyz;

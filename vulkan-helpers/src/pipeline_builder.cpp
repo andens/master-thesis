@@ -20,6 +20,29 @@ void PipelineBuilder::shader_stage(VkShaderStageFlagBits stage, VkShaderModule s
   shaders_.push_back(shader_info);
 }
 
+void PipelineBuilder::shader_specialization_data(void const* data, size_t data_size) {
+  shader_specializations_.push_back({});
+  auto& spec_info = shader_specializations_.back().spec_info;
+  spec_info.dataSize = data_size;
+  spec_info.pData = data;
+
+  auto& shader_stage = shaders_.back();
+  shader_stage.pSpecializationInfo = &spec_info;
+}
+
+void PipelineBuilder::shader_specialization_map(uint32_t constant_id, uint32_t offset, size_t size) {
+  auto& specialization = shader_specializations_.back();
+
+  VkSpecializationMapEntry map_entry {};
+  map_entry.constantID = constant_id;
+  map_entry.offset = offset;
+  map_entry.size = size;
+  specialization.map_entries.push_back(map_entry);
+
+  specialization.spec_info.mapEntryCount = static_cast<uint32_t>(specialization.map_entries.size());
+  specialization.spec_info.pMapEntries = specialization.map_entries.data();
+}
+
 void PipelineBuilder::vertex_layout(const std::function<void(PipelineVertexLayout&)>& definition) {
   vertex_layout_ = std::unique_ptr<PipelineVertexLayout>(new PipelineVertexLayout);
   definition(*vertex_layout_);
