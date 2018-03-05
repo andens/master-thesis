@@ -157,8 +157,8 @@ void Renderer::render() {
   VkBuffer vertex_buf = vertex_buffer_->vulkan_buffer_handle();
   VkDeviceSize offset = 0;
   graphics_cmd_buf_->vkCmdBindVertexBuffers(0, 1, &vertex_buf, &offset);
-  //graphics_cmd_buf_->vkCmdDraw(36, 1, 0, 0);
-  graphics_cmd_buf_->vkCmdDraw(2160, 1, 36, 0);
+  graphics_cmd_buf_->vkCmdDraw(36, 1, 0, 0);
+  graphics_cmd_buf_->vkCmdDraw(2160, 1, 36, 1);
 
   graphics_cmd_buf_->vkCmdEndRenderPass();
 
@@ -701,6 +701,9 @@ void Renderer::create_descriptor_sets() {
 
   // TODO: Hardcoded render job for now
   render_jobs_descriptor_set_->update_data(*device_, 0, [](RenderJobsDescriptorSet::RenderJobData& data) {
+    DirectX::XMStoreFloat4x4(&data.transform, DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f));
+  });
+  render_jobs_descriptor_set_->update_data(*device_, 1, [](RenderJobsDescriptorSet::RenderJobData& data) {
     DirectX::XMStoreFloat4x4(&data.transform, DirectX::XMMatrixTranslation(5.0f, 0.0f, 0.0f));
   });
 }
