@@ -69,6 +69,7 @@ private:
   void interleave_vertex_data(Mesh* mesh, std::vector<Vertex>& vertices);
   void create_descriptor_sets();
   void create_indirect_buffer();
+  uint32_t update_indirect_buffer();
 
 private:
   VkExtent2D render_area_ { 0, 0 };
@@ -110,7 +111,8 @@ private:
 
   std::unique_ptr<RenderCache> render_cache_;
 
-  bool render_indirectly_ { false };
+  bool render_indirectly_ { true };
+  VkDrawIndirectCommand* mapped_indirect_buffer_ { nullptr };
   std::unique_ptr<vk::Buffer> indirect_buffer_;
   const uint32_t max_draw_calls_ { 2000 };
 

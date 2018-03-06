@@ -62,6 +62,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    device_->vkUnmapMemory(indirect_buffer_->vulkan_memory_handle());
     indirect_buffer_->destroy(*device_);
     vertex_buffer_->destroy(*device_);
     device_->vkDestroyFence(gbuffer_generation_fence_, nullptr);
@@ -169,7 +170,8 @@ void Renderer::render() {
   VkDeviceSize offset = 0;
   graphics_cmd_buf_->vkCmdBindVertexBuffers(0, 1, &vertex_buf, &offset);
   if (render_indirectly_) {
-    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, 2, sizeof(VkDrawIndirectCommand));
+    uint32_t count = update_indirect_buffer();
+    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, count, sizeof(VkDrawIndirectCommand));
   }
   else {
     render_cache_->enumerate([this](uint32_t job, RenderObject object_type) {
@@ -744,28 +746,28 @@ void Renderer::create_descriptor_sets() {
 
 void Renderer::create_indirect_buffer() {
   indirect_buffer_.reset(new vk::Buffer { *device_, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, sizeof(VkDrawIndirectCommand) * max_draw_calls_ });
+  device_->vkMapMemory(indirect_buffer_->vulkan_memory_handle(), 0, sizeof(VkDrawIndirectCommand) * max_draw_calls_, 0, reinterpret_cast<void**>(&mapped_indirect_buffer_));
+}
 
-  // TODO: Hardcoded mapping for. This is to be replaced with proper draw call management
-  VkDrawIndirectCommand* mapped_data = nullptr;
-  device_->vkMapMemory(indirect_buffer_->vulkan_memory_handle(), 0, sizeof(VkDrawIndirectCommand) * 2, 0, reinterpret_cast<void**>(&mapped_data));
+uint32_t Renderer::update_indirect_buffer() {
+  uint32_t count = 0;
+  render_cache_->enumerate([this, &count](uint32_t job, RenderObject object_type) {
+    VkDrawIndirectCommand* indirect_command = mapped_indirect_buffer_ + count;
+    indirect_command->vertexCount = object_type == RenderObject::Box ? 36 : 2160;
+    indirect_command->instanceCount = 1;
+    indirect_command->firstVertex = object_type == RenderObject::Box ? 0 : 36;
+    indirect_command->firstInstance = job;
 
-  mapped_data->vertexCount = 36;
-  mapped_data->instanceCount = 1;
-  mapped_data->firstVertex = 0;
-  mapped_data->firstInstance = 0;
-  ++mapped_data;
-  mapped_data->vertexCount = 2160;
-  mapped_data->instanceCount = 1;
-  mapped_data->firstVertex = 36;
-  mapped_data->firstInstance = 0;
+    VkMappedMemoryRange flush_range {};
+    flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+    flush_range.pNext = nullptr;
+    flush_range.memory = indirect_buffer_->vulkan_memory_handle();
+    flush_range.offset = count * sizeof(VkDrawIndirectCommand);
+    flush_range.size = sizeof(VkDrawIndirectCommand);
+    device_->vkFlushMappedMemoryRanges(1, &flush_range);
 
-  VkMappedMemoryRange flush_range {};
-  flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-  flush_range.pNext = nullptr;
-  flush_range.memory = indirect_buffer_->vulkan_memory_handle();
-  flush_range.offset = 0;
-  flush_range.size = sizeof(VkDrawIndirectCommand) * 2;
-  device_->vkFlushMappedMemoryRanges(1, &flush_range);
+    ++count;
+  });
 
-  device_->vkUnmapMemory(indirect_buffer_->vulkan_memory_handle());
+  return count;
 }

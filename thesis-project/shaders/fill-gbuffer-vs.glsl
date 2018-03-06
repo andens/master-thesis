@@ -32,7 +32,8 @@ layout(location = 0) out vec2 o_TexC;
 //layout(location = 1) out vec3 o_NormV;
 
 void main() {
-  uint drawcall_index = INDIRECT_RENDERING == 1 ? gl_DrawIDARB : gl_BaseInstanceARB;
+  //uint drawcall_index = INDIRECT_RENDERING == 1 ? gl_DrawIDARB : gl_BaseInstanceARB;
+  uint drawcall_index = gl_BaseInstanceARB;
 
   gl_Position = vec4(i_PosL, 1.0f) * g_render_jobs_data[drawcall_index].transform * g_view * g_proj;
 
