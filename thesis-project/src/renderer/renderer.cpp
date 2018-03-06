@@ -747,6 +747,33 @@ void Renderer::create_indirect_buffer() {
   device_->vkMapMemory(indirect_buffer_->vulkan_memory_handle(), 0, sizeof(VkDrawIndirectCommand) * max_draw_calls_, 0, reinterpret_cast<void**>(&mapped_indirect_buffer_));
 }
 
+// TODO: The next step is to update the indirect buffer incrementally.
+
+// To allow rendering just the number of meshes that we have recorded, we need
+// to pack the draw calls at the beginning of the buffer. This implies that we
+// can't just invalidate a removed draw call by setting its instance count to
+// zero because that "no-op draw" is included in the count, meaning that the
+// last object would not be included. Instead we move the last draw call in its
+// place, which is fine because we use base instance instead of drawid for
+// mapping to instance data in the shader so there's nothing to synchronize.
+// This will not be an issue for me (I will just rewrite the same calls and not
+// delete them), at least not at first, but is mentioned for completeness.
+// Note that AZDO says base instance is not visible for us, so it's probably
+// something new or Vulkan-specific in shader_draw_parameters.
+
+// Moving the last element can be tricky for the future, though. If that job
+// is later deleted in the cache, we need to find it in the indirect buffer.
+// We can probably use tracking information that is returned to the cache via
+// the lambda when jobs are added. This tracking information is provided on
+// subsequent updates for the render job. If the tracking information is the
+// location in the indirect buffer, we can easily synchronize the indirect
+// buffer on updates later.
+
+// A dirtify method could be used on the cache to indicate that we want to
+// trigger a record for the draw call. This would be unnecessary in a real
+// application, but allows us to easily measure performance impact of various
+// amounts of incremental changes.
+
 uint32_t Renderer::update_indirect_buffer() {
   uint32_t count = 0;
   render_cache_->enumerate([this, &count](uint32_t job, RenderObject object_type) {
