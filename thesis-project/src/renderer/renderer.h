@@ -1,11 +1,13 @@
 #pragma once
 
 #include <DirectXMath.h>
+#include <functional>
 #include <memory>
 #include <vector>
 #include <vulkan-helpers/vulkan_include.inl>
 
 class Mesh;
+class RenderCache;
 class RenderJobsDescriptorSet;
 
 namespace graphics {
@@ -39,6 +41,7 @@ public:
 
   void render();
   void use_matrices(DirectX::CXMMATRIX view, DirectX::CXMMATRIX proj);
+  void borrow_render_cache(std::function<void(RenderCache& cache)> const& provide);
 
 private:
   struct Vertex {
@@ -105,7 +108,9 @@ private:
   std::unique_ptr<vk::DescriptorPool> descriptor_pool_;
   std::unique_ptr<RenderJobsDescriptorSet> render_jobs_descriptor_set_;
 
-  bool render_indirectly_ { true };
+  std::unique_ptr<RenderCache> render_cache_;
+
+  bool render_indirectly_ { false };
   std::unique_ptr<vk::Buffer> indirect_buffer_;
   const uint32_t max_draw_calls_ { 2000 };
 

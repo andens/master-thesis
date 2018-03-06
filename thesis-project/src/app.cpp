@@ -6,6 +6,7 @@
 #include <iostream>
 #include <stdexcept>
 #include "camera/camera.h"
+#include "render-cache/render-cache.h"
 #include "renderer/renderer.h"
 
 void App::run() {
@@ -34,6 +35,10 @@ void App::run() {
   camera_->SetLens(DirectX::XMConvertToRadians(90.0f), window_width_ / static_cast<float>(window_height_), 1000.0f, 0.1f);
 
   renderer_.reset(new Renderer(glfwGetWin32Window(window_), window_width_, window_height_));
+  renderer_->borrow_render_cache([](RenderCache& cache) {
+    cache.start_rendering(0, RenderObject::Box);
+    cache.start_rendering(1, RenderObject::Sphere);
+  });
 
   float time = glfwGetTime();
 

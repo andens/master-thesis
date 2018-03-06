@@ -28,6 +28,7 @@
 #include "../gbuffer/gbuffer.h"
 #include "../mesh/mesh.h"
 #include "../obj-loader/obj-loader.h"
+#include "../render-cache/render-cache.h"
 #include "../render-jobs-descriptor-set/render-jobs-descriptor-set.h"
 
 Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
@@ -54,6 +55,8 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
 
   DirectX::XMStoreFloat4x4(&view_, DirectX::XMMatrixIdentity());
   DirectX::XMStoreFloat4x4(&proj_, DirectX::XMMatrixIdentity());
+
+  render_cache_.reset(new RenderCache);
 }
 
 Renderer::~Renderer() {
@@ -169,8 +172,9 @@ void Renderer::render() {
     graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, 2, sizeof(VkDrawIndirectCommand));
   }
   else {
-    graphics_cmd_buf_->vkCmdDraw(36, 1, 0, 0);
-    graphics_cmd_buf_->vkCmdDraw(2160, 1, 36, 1);
+    render_cache_->enumerate([this](uint32_t job, RenderObject object_type) {
+      graphics_cmd_buf_->vkCmdDraw(object_type == RenderObject::Box ? 36 : 2160, 1, object_type == RenderObject::Box ? 0 : 36, job);
+    });
   }
 
   graphics_cmd_buf_->vkCmdEndRenderPass();
@@ -335,6 +339,10 @@ void Renderer::create_instance() {
 #endif
 
   instance_ = builder.build(vk_globals_.get());
+}
+
+void Renderer::borrow_render_cache(std::function<void(RenderCache& cache)> const& provide) {
+  provide(*render_cache_);
 }
 
 void Renderer::create_debug_callback() {
