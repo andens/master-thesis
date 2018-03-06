@@ -8,6 +8,7 @@
 #include "camera/camera.h"
 #include "render-cache/render-cache.h"
 #include "renderer/renderer.h"
+#include "scene/scene.h"
 
 void App::run() {
   if (!glfwInit()) {
@@ -38,12 +39,7 @@ void App::run() {
   camera_->SetLens(DirectX::XMConvertToRadians(40.0f), window_width_ / static_cast<float>(window_height_), 1000.0f, 0.1f);
 
   renderer_.reset(new Renderer(glfwGetWin32Window(window_), window_width_, window_height_));
-  renderer_->borrow_render_cache([](RenderCache& cache) {
-    cache.start_rendering(0, RenderObject::Box);
-    cache.start_rendering(1, RenderObject::Sphere);
-  });
-  renderer_->update_transform(0, DirectX::XMMatrixTranslation(0.0f, 0.0f, 10.0f));
-  renderer_->update_transform(1, DirectX::XMMatrixTranslation(5.0f, 0.0f, 10.0f));
+  scene_.reset(new Scene { *renderer_ });
 
   float time = glfwGetTime();
 
@@ -70,6 +66,7 @@ App::App() = default;
 App::~App() = default;
 
 void App::frame(float delta_time, float total_time) {
+  scene_->update(delta_time, *renderer_);
   renderer_->use_matrices(camera_->View(), camera_->Proj());
   renderer_->render();
 }

@@ -6,6 +6,7 @@
 class Camera;
 class GLFWwindow;
 class Renderer;
+class Scene;
 
 class App {
 public:
@@ -24,4 +25,5 @@ private:
   uint32_t window_height_ { 720 };
   std::unique_ptr<Renderer> renderer_;
   std::unique_ptr<Camera> camera_;
+  std::unique_ptr<Scene> scene_;
 };
