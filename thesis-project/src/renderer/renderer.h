@@ -42,6 +42,7 @@ public:
   void render();
   void use_matrices(DirectX::CXMMATRIX view, DirectX::CXMMATRIX proj);
   void borrow_render_cache(std::function<void(RenderCache& cache)> const& provide);
+  void update_transform(uint32_t render_job, DirectX::CXMMATRIX transform);
 
 private:
   struct Vertex {

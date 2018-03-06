@@ -347,6 +347,12 @@ void Renderer::borrow_render_cache(std::function<void(RenderCache& cache)> const
   provide(*render_cache_);
 }
 
+void Renderer::update_transform(uint32_t render_job, DirectX::CXMMATRIX transform) {
+  render_jobs_descriptor_set_->update_data(*device_, render_job, [&transform](RenderJobsDescriptorSet::RenderJobData& data) {
+    DirectX::XMStoreFloat4x4(&data.transform, transform);
+  });
+}
+
 void Renderer::create_debug_callback() {
   VkDebugReportCallbackCreateInfoEXT callback_info {};
   callback_info.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
@@ -734,14 +740,6 @@ void Renderer::create_descriptor_sets() {
   descriptor_pool_.reset(new vk::DescriptorPool { *device_, builder });
 
   render_jobs_descriptor_set_.reset(new RenderJobsDescriptorSet { *device_, *descriptor_pool_ });
-
-  // TODO: Hardcoded render job for now
-  render_jobs_descriptor_set_->update_data(*device_, 0, [](RenderJobsDescriptorSet::RenderJobData& data) {
-    DirectX::XMStoreFloat4x4(&data.transform, DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f));
-  });
-  render_jobs_descriptor_set_->update_data(*device_, 1, [](RenderJobsDescriptorSet::RenderJobData& data) {
-    DirectX::XMStoreFloat4x4(&data.transform, DirectX::XMMatrixTranslation(5.0f, 0.0f, 0.0f));
-  });
 }
 
 void Renderer::create_indirect_buffer() {

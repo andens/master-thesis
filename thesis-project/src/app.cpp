@@ -39,6 +39,8 @@ void App::run() {
     cache.start_rendering(0, RenderObject::Box);
     cache.start_rendering(1, RenderObject::Sphere);
   });
+  renderer_->update_transform(0, DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f));
+  renderer_->update_transform(1, DirectX::XMMatrixTranslation(5.0f, 0.0f, 0.0f));
 
   float time = glfwGetTime();
 
