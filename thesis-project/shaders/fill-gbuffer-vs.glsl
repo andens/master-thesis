@@ -20,7 +20,7 @@ struct RenderJobData {
   mat4 transform;
 };
 
-layout(set = 0, location = 0) buffer RenderJobsData {
+layout(set = 0, binding = 0) buffer RenderJobsData {
   RenderJobData g_render_jobs_data[];
 };
 
