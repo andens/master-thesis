@@ -30,17 +30,20 @@ void App::run() {
   });
 
   camera_.reset(new Camera);
-  camera_->LookAt(DirectX::XMFLOAT3 { 0.0f, 0.0f, -5.0f }, DirectX::XMFLOAT3 { 0.0f, 0.0f, 1.0f }, DirectX::XMFLOAT3 { 0.0f, 1.0f, 0.0f });
+  camera_->LookAt(DirectX::XMFLOAT3 { 0.0f, 0.0f, 0.0f }, DirectX::XMFLOAT3 { 0.0f, 0.0f, 1.0f }, DirectX::XMFLOAT3 { 0.0f, 1.0f, 0.0f });
   camera_->UpdateViewMatrix();
-  camera_->SetLens(DirectX::XMConvertToRadians(90.0f), window_width_ / static_cast<float>(window_height_), 1000.0f, 0.1f);
+  // Well, no matter what I do I can't get a proper (that is, around 90 degrees)
+  // FoV to work without ridiculous amounts of perspective distortion. This
+  // will have to suffice.
+  camera_->SetLens(DirectX::XMConvertToRadians(40.0f), window_width_ / static_cast<float>(window_height_), 1000.0f, 0.1f);
 
   renderer_.reset(new Renderer(glfwGetWin32Window(window_), window_width_, window_height_));
   renderer_->borrow_render_cache([](RenderCache& cache) {
     cache.start_rendering(0, RenderObject::Box);
     cache.start_rendering(1, RenderObject::Sphere);
   });
-  renderer_->update_transform(0, DirectX::XMMatrixTranslation(0.0f, 0.0f, 0.0f));
-  renderer_->update_transform(1, DirectX::XMMatrixTranslation(5.0f, 0.0f, 0.0f));
+  renderer_->update_transform(0, DirectX::XMMatrixTranslation(0.0f, 0.0f, 10.0f));
+  renderer_->update_transform(1, DirectX::XMMatrixTranslation(5.0f, 0.0f, 10.0f));
 
   float time = glfwGetTime();
 
