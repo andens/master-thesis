@@ -174,8 +174,9 @@ void Renderer::render() {
     graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, count, sizeof(VkDrawIndirectCommand));
   }
   else {
-    render_cache_->enumerate([this](uint32_t job, RenderObject object_type) {
-      graphics_cmd_buf_->vkCmdDraw(object_type == RenderObject::Box ? 36 : 2160, 1, object_type == RenderObject::Box ? 0 : 36, job);
+    render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
+      graphics_cmd_buf_->vkCmdDraw(job_context.object_type == RenderObject::Box ? 36 : 2160, 1, job_context.object_type == RenderObject::Box ? 0 : 36, job_context.job);
+      return job_context.user_data;
     });
   }
 
@@ -776,12 +777,12 @@ void Renderer::create_indirect_buffer() {
 
 uint32_t Renderer::update_indirect_buffer() {
   uint32_t count = 0;
-  render_cache_->enumerate([this, &count](uint32_t job, RenderObject object_type) {
+  render_cache_->enumerate_all([this, &count](RenderCache::JobContext const& job_context) -> void* {
     VkDrawIndirectCommand* indirect_command = mapped_indirect_buffer_ + count;
-    indirect_command->vertexCount = object_type == RenderObject::Box ? 36 : 2160;
+    indirect_command->vertexCount = job_context.object_type == RenderObject::Box ? 36 : 2160;
     indirect_command->instanceCount = 1;
-    indirect_command->firstVertex = object_type == RenderObject::Box ? 0 : 36;
-    indirect_command->firstInstance = job;
+    indirect_command->firstVertex = job_context.object_type == RenderObject::Box ? 0 : 36;
+    indirect_command->firstInstance = job_context.job;
 
     VkMappedMemoryRange flush_range {};
     flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -792,6 +793,8 @@ uint32_t Renderer::update_indirect_buffer() {
     device_->vkFlushMappedMemoryRanges(1, &flush_range);
 
     ++count;
+
+    return job_context.user_data;
   });
 
   return count;
