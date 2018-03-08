@@ -70,7 +70,7 @@ private:
   void interleave_vertex_data(Mesh* mesh, std::vector<Vertex>& vertices);
   void create_descriptor_sets();
   void create_indirect_buffer();
-  uint32_t update_indirect_buffer();
+  void update_indirect_buffer();
 
 private:
   VkExtent2D render_area_ { 0, 0 };

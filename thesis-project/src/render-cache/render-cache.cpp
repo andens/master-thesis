@@ -27,6 +27,7 @@ void RenderCache::enumerate_all(std::function<void*(JobContext const&)> const& i
   enumerate_changes(it);
 }
 
+// Note: Only added elements for now
 void RenderCache::enumerate_changes(std::function<void*(JobContext const&)> const& it) {
   std::for_each(changes_.begin(), changes_.end(), [this, &it](JobContext& c) {
     auto user_data = it(c);
@@ -38,4 +39,8 @@ void RenderCache::enumerate_changes(std::function<void*(JobContext const&)> cons
   });
 
   changes_.clear();
+}
+
+size_t RenderCache::job_count() const {
+  return jobs_.size();
 }

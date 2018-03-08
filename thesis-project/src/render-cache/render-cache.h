@@ -26,6 +26,7 @@ public:
 
   void enumerate_all(std::function<void*(JobContext const&)> const& it);
   void enumerate_changes(std::function<void*(JobContext const&)> const& it);
+  size_t job_count() const;
 
 private:
   std::unordered_map<uint32_t, JobContext> jobs_;

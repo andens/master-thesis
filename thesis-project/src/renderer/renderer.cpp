@@ -170,8 +170,8 @@ void Renderer::render() {
   VkDeviceSize offset = 0;
   graphics_cmd_buf_->vkCmdBindVertexBuffers(0, 1, &vertex_buf, &offset);
   if (render_indirectly_) {
-    uint32_t count = update_indirect_buffer();
-    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, count, sizeof(VkDrawIndirectCommand));
+    update_indirect_buffer();
+    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, render_cache_->job_count(), sizeof(VkDrawIndirectCommand));
   }
   else {
     render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
@@ -775,10 +775,12 @@ void Renderer::create_indirect_buffer() {
 // application, but allows us to easily measure performance impact of various
 // amounts of incremental changes.
 
-uint32_t Renderer::update_indirect_buffer() {
-  uint32_t count = 0;
-  render_cache_->enumerate_all([this, &count](RenderCache::JobContext const& job_context) -> void* {
-    VkDrawIndirectCommand* indirect_command = mapped_indirect_buffer_ + count;
+void Renderer::update_indirect_buffer() {
+  render_cache_->enumerate_changes([this](RenderCache::JobContext const& job_context) -> void* {
+    //size_t indirect_buffer_element = reinterpret_cast<size_t>(job_context.user_data);
+    size_t indirect_buffer_element = render_cache_->job_count();
+
+    VkDrawIndirectCommand* indirect_command = mapped_indirect_buffer_ + indirect_buffer_element;
     indirect_command->vertexCount = job_context.object_type == RenderObject::Box ? 36 : 2160;
     indirect_command->instanceCount = 1;
     indirect_command->firstVertex = job_context.object_type == RenderObject::Box ? 0 : 36;
@@ -788,14 +790,10 @@ uint32_t Renderer::update_indirect_buffer() {
     flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
     flush_range.pNext = nullptr;
     flush_range.memory = indirect_buffer_->vulkan_memory_handle();
-    flush_range.offset = count * sizeof(VkDrawIndirectCommand);
+    flush_range.offset = indirect_buffer_element * sizeof(VkDrawIndirectCommand);
     flush_range.size = sizeof(VkDrawIndirectCommand);
     device_->vkFlushMappedMemoryRanges(1, &flush_range);
 
-    ++count;
-
-    return job_context.user_data;
+    return reinterpret_cast<void*>(indirect_buffer_element);
   });
-
-  return count;
 }
