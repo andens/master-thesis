@@ -776,7 +776,7 @@ void Renderer::create_indirect_buffer() {
 // amounts of incremental changes.
 
 void Renderer::update_indirect_buffer() {
-  render_cache_->enumerate_changes([this](RenderCache::JobContext const& job_context) -> void* {
+  render_cache_->enumerate_changes([this](RenderCache::Change change, RenderCache::JobContext const& job_context) -> void* {
     //size_t indirect_buffer_element = reinterpret_cast<size_t>(job_context.user_data);
     size_t indirect_buffer_element = render_cache_->job_count();
 

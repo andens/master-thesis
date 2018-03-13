@@ -20,15 +20,21 @@ public:
     void* user_data { nullptr };
   };
 
+  enum class Change {
+    Add,
+    Remove,
+    Modify
+  };
+
 public:
   void start_rendering(uint32_t job, RenderObject object_type);
   void stop_rendering(uint32_t job);
 
   void enumerate_all(std::function<void*(JobContext const&)> const& it);
-  void enumerate_changes(std::function<void*(JobContext const&)> const& it);
+  void enumerate_changes(std::function<void*(Change change, JobContext const&)> const& it);
   size_t job_count() const;
 
 private:
   std::unordered_map<uint32_t, JobContext> jobs_;
-  std::vector<JobContext> changes_;
+  std::vector<std::pair<Change, JobContext>> changes_;
 };

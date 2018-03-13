@@ -10,7 +10,7 @@ void RenderCache::start_rendering(uint32_t job, RenderObject object_type) {
   context.job = job;
   context.object_type = object_type;
   context.user_data = nullptr;
-  changes_.push_back(context);
+  changes_.push_back(std::make_pair(Change::Add, context));
 }
 
 void RenderCache::stop_rendering(uint32_t job) {
@@ -24,18 +24,20 @@ void RenderCache::enumerate_all(std::function<void*(JobContext const&)> const& i
     context.second.user_data = user_data;
   });
 
-  enumerate_changes(it);
+  enumerate_changes([&it](Change, JobContext const& context) -> void* {
+    return it(context);
+  });
 }
 
 // Note: Only added elements for now
-void RenderCache::enumerate_changes(std::function<void*(JobContext const&)> const& it) {
-  std::for_each(changes_.begin(), changes_.end(), [this, &it](JobContext& c) {
-    auto user_data = it(c);
-    c.user_data = user_data;
+void RenderCache::enumerate_changes(std::function<void*(Change change, JobContext const&)> const& it) {
+  std::for_each(changes_.begin(), changes_.end(), [this, &it](std::pair<Change, JobContext>& c) {
+    auto user_data = it(c.first, c.second);
+    c.second.user_data = user_data;
 
     // Depending on what kind of change we are doing, it might not be as simple
     // as just updating (or inserting) a value.
-    jobs_[c.job] = std::move(c);
+    jobs_[c.second.job] = std::move(c.second);
   });
 
   changes_.clear();
