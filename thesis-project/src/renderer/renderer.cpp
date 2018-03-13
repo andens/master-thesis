@@ -171,7 +171,7 @@ void Renderer::render() {
   graphics_cmd_buf_->vkCmdBindVertexBuffers(0, 1, &vertex_buf, &offset);
   if (render_indirectly_) {
     update_indirect_buffer();
-    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, render_cache_->job_count(), sizeof(VkDrawIndirectCommand));
+    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, current_draw_calls_, sizeof(VkDrawIndirectCommand));
   }
   else {
     render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
@@ -781,7 +781,7 @@ void Renderer::update_indirect_buffer() {
   render_cache_->enumerate_changes([this](RenderCache::Change change, RenderCache::JobContext const& job_context) -> void* {
     size_t indirect_buffer_element { std::numeric_limits<size_t>::max() };
     if (change == RenderCache::Change::Add) {
-      indirect_buffer_element = render_cache_->job_count();
+      indirect_buffer_element = current_draw_calls_;
     }
     else {
       assert(change == RenderCache::Change::Modify || change == RenderCache::Change::Remove);
@@ -805,7 +805,26 @@ void Renderer::update_indirect_buffer() {
     }
     else {
       assert(change == RenderCache::Change::Remove);
-      throw std::runtime_error("Renderer::update_indirect_buffer: Not implemented: render cache change: Remove");
+      if (indirect_buffer_element + 1 < current_draw_calls_) {
+        VkDrawIndirectCommand* removed_command = mapped_indirect_buffer_ + indirect_buffer_element;
+        VkDrawIndirectCommand* last_command = mapped_indirect_buffer_ + (current_draw_calls_ - 1);
+        *removed_command = *last_command;
+
+        VkMappedMemoryRange flush_range {};
+        flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        flush_range.pNext = nullptr;
+        flush_range.memory = indirect_buffer_->vulkan_memory_handle();
+        flush_range.offset = indirect_buffer_element * sizeof(VkDrawIndirectCommand);
+        flush_range.size = sizeof(VkDrawIndirectCommand);
+        device_->vkFlushMappedMemoryRanges(1, &flush_range);
+      }
+    }
+
+    if (change == RenderCache::Change::Add) {
+      current_draw_calls_++;
+    }
+    else if (change == RenderCache::Change::Remove) {
+      current_draw_calls_--;
     }
 
     return reinterpret_cast<void*>(indirect_buffer_element);
