@@ -21,6 +21,13 @@ void RenderCache::stop_rendering(uint32_t job) {
   }
 }
 
+void RenderCache::dirtify(uint32_t job) {
+  auto existing = jobs_.find(job);
+  if (existing != jobs_.end()) {
+    changes_.push_back(std::make_pair(Change::Modify, existing->second));
+  }
+}
+
 void RenderCache::enumerate_all(std::function<void*(JobContext const&)> const& it) {
   std::for_each(jobs_.begin(), jobs_.end(), [&it](std::pair<const uint32_t, JobContext>& context) {
     auto user_data = it(context.second);

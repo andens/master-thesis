@@ -29,6 +29,7 @@ public:
 public:
   void start_rendering(uint32_t job, RenderObject object_type);
   void stop_rendering(uint32_t job);
+  void dirtify(uint32_t job);
 
   void enumerate_all(std::function<void*(JobContext const&)> const& it);
   void enumerate_changes(std::function<void*(Change change, JobContext const&)> const& it);
