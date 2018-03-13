@@ -39,15 +39,17 @@ void RenderCache::enumerate_all(std::function<void*(JobContext const&)> const& i
   });
 }
 
-// Note: Only added elements for now
 void RenderCache::enumerate_changes(std::function<void*(Change change, JobContext const&)> const& it) {
   std::for_each(changes_.begin(), changes_.end(), [this, &it](std::pair<Change, JobContext>& c) {
     auto user_data = it(c.first, c.second);
     c.second.user_data = user_data;
 
-    // Depending on what kind of change we are doing, it might not be as simple
-    // as just updating (or inserting) a value.
-    jobs_[c.second.job] = std::move(c.second);
+    // When a job has been added or modified we synchronize with the complete
+    // job store. Removed jobs have already been removed from the job store and
+    // are just included in changes for informative purposes.
+    if (c.first == Change::Add || c.first == Change::Modify) {
+      jobs_[c.second.job] = std::move(c.second);
+    }
   });
 
   changes_.clear();

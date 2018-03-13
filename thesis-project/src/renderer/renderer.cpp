@@ -775,25 +775,40 @@ void Renderer::create_indirect_buffer() {
 // application, but allows us to easily measure performance impact of various
 // amounts of incremental changes.
 
+#pragma push_macro("max")
+#undef max
 void Renderer::update_indirect_buffer() {
   render_cache_->enumerate_changes([this](RenderCache::Change change, RenderCache::JobContext const& job_context) -> void* {
-    //size_t indirect_buffer_element = reinterpret_cast<size_t>(job_context.user_data);
-    size_t indirect_buffer_element = render_cache_->job_count();
+    size_t indirect_buffer_element { std::numeric_limits<size_t>::max() };
+    if (change == RenderCache::Change::Add) {
+      indirect_buffer_element = render_cache_->job_count();
+    }
+    else {
+      assert(change == RenderCache::Change::Modify || change == RenderCache::Change::Remove);
+      indirect_buffer_element = reinterpret_cast<size_t>(job_context.user_data);
+    }
 
-    VkDrawIndirectCommand* indirect_command = mapped_indirect_buffer_ + indirect_buffer_element;
-    indirect_command->vertexCount = job_context.object_type == RenderObject::Box ? 36 : 2160;
-    indirect_command->instanceCount = 1;
-    indirect_command->firstVertex = job_context.object_type == RenderObject::Box ? 0 : 36;
-    indirect_command->firstInstance = job_context.job;
+    if (change == RenderCache::Change::Add || change == RenderCache::Change::Modify) {
+      VkDrawIndirectCommand* indirect_command = mapped_indirect_buffer_ + indirect_buffer_element;
+      indirect_command->vertexCount = job_context.object_type == RenderObject::Box ? 36 : 2160;
+      indirect_command->instanceCount = 1;
+      indirect_command->firstVertex = job_context.object_type == RenderObject::Box ? 0 : 36;
+      indirect_command->firstInstance = job_context.job;
 
-    VkMappedMemoryRange flush_range {};
-    flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-    flush_range.pNext = nullptr;
-    flush_range.memory = indirect_buffer_->vulkan_memory_handle();
-    flush_range.offset = indirect_buffer_element * sizeof(VkDrawIndirectCommand);
-    flush_range.size = sizeof(VkDrawIndirectCommand);
-    device_->vkFlushMappedMemoryRanges(1, &flush_range);
+      VkMappedMemoryRange flush_range {};
+      flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+      flush_range.pNext = nullptr;
+      flush_range.memory = indirect_buffer_->vulkan_memory_handle();
+      flush_range.offset = indirect_buffer_element * sizeof(VkDrawIndirectCommand);
+      flush_range.size = sizeof(VkDrawIndirectCommand);
+      device_->vkFlushMappedMemoryRanges(1, &flush_range);
+    }
+    else {
+      assert(change == RenderCache::Change::Remove);
+      throw std::runtime_error("Renderer::update_indirect_buffer: Not implemented: render cache change: Remove");
+    }
 
     return reinterpret_cast<void*>(indirect_buffer_element);
   });
 }
+#pragma pop_macro("max");
