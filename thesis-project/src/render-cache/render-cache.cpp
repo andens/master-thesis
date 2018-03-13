@@ -14,8 +14,11 @@ void RenderCache::start_rendering(uint32_t job, RenderObject object_type) {
 }
 
 void RenderCache::stop_rendering(uint32_t job) {
-  // Note: does not result in a change just yet!
-  jobs_.erase(job);
+  auto existing = jobs_.find(job);
+  if (existing != jobs_.end()) {
+    changes_.push_back(std::make_pair(Change::Remove, std::move(existing->second)));
+    jobs_.erase(existing);
+  }
 }
 
 void RenderCache::enumerate_all(std::function<void*(JobContext const&)> const& it) {
