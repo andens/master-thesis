@@ -77,6 +77,8 @@ private:
   void initialize_imgui();
   void create_imgui_font_texture();
   void update_gui_vertex_data(ImDrawData* draw_data);
+  void create_dgc_resources();
+  void create_object_table();
 
 private:
   VkExtent2D render_area_ { 0, 0 };
@@ -143,6 +145,8 @@ private:
   uint32_t current_total_draw_calls_ { 0 };
   uint32_t current_alpha_draw_calls_ { 0 };
   uint32_t current_beta_draw_calls_ { 0 };
+
+  VkObjectTableNVX object_table_ { VK_NULL_HANDLE };
 
   DirectX::XMFLOAT4X4 view_ {};
   DirectX::XMFLOAT4X4 proj_ {};

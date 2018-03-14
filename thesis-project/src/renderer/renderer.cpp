@@ -57,6 +57,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   create_vertex_buffer();
   create_indirect_buffer();
   initialize_imgui();
+  create_dgc_resources();
 
   DirectX::XMStoreFloat4x4(&view_, DirectX::XMMatrixIdentity());
   DirectX::XMStoreFloat4x4(&proj_, DirectX::XMMatrixIdentity());
@@ -67,6 +68,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    device_->vkDestroyObjectTableNVX(object_table_, nullptr);
     device_->vkUnmapMemory(indirect_buffer_->vulkan_memory_handle());
     indirect_buffer_->destroy(*device_);
     vertex_buffer_->destroy(*device_);
@@ -469,6 +471,7 @@ void Renderer::create_device() {
   vk::DeviceBuilder builder;
   builder.use_extension("VK_KHR_swapchain");
   builder.use_extension("VK_KHR_shader_draw_parameters");
+  builder.use_extension("VK_NVX_device_generated_commands");
   device_ = builder.build(instance_.get());
   graphics_queue_ = device_->graphics_queue();
   compute_queue_ = device_->compute_queue();
@@ -1290,5 +1293,55 @@ void Renderer::update_gui_vertex_data(ImDrawData* draw_data) {
 
     device_->vkUnmapMemory(gui_vertex_buffer_->vulkan_memory_handle());
     device_->vkUnmapMemory(gui_index_buffer_->vulkan_memory_handle());
+  }
+}
+
+void Renderer::create_dgc_resources() {
+  VkDeviceGeneratedCommandsFeaturesNVX features {};
+  features.sType = VK_STRUCTURE_TYPE_DEVICE_GENERATED_COMMANDS_FEATURES_NVX;
+
+  VkDeviceGeneratedCommandsLimitsNVX limits {};
+  limits.sType = VK_STRUCTURE_TYPE_DEVICE_GENERATED_COMMANDS_LIMITS_NVX;
+
+  device_->physical_device()->vkGetPhysicalDeviceGeneratedCommandsPropertiesNVX(&features, &limits);
+
+  create_object_table();
+}
+
+void Renderer::create_object_table() {
+  // Map objects in a table for use by the device when generating commands.
+  // This is used because we can't use the CPU side pointers directly on the
+  // device. Detailed resource bindings are registered later with
+  // vkRegisterObjectsNVX.
+  std::array<VkObjectEntryTypeNVX, 1> entry_types {
+    VK_OBJECT_ENTRY_TYPE_PIPELINE_NVX,
+  };
+
+  std::array<uint32_t, 1> entry_counts {
+    1,
+  };
+
+  std::array<VkObjectEntryUsageFlagsNVX, 1> entry_usage_flags {
+    VK_OBJECT_ENTRY_USAGE_GRAPHICS_BIT_NVX,
+  };
+
+  static_assert(entry_types.size() == entry_counts.size() && entry_types.size() == entry_usage_flags.size());
+
+  VkObjectTableCreateInfoNVX table_info {};
+  table_info.sType = VK_STRUCTURE_TYPE_OBJECT_TABLE_CREATE_INFO_NVX;
+  table_info.pNext = nullptr;
+  table_info.objectCount = entry_types.size();
+  table_info.pObjectEntryTypes = entry_types.data();
+  table_info.pObjectEntryCounts = entry_counts.data();
+  table_info.pObjectEntryUsageFlags = entry_usage_flags.data();
+  table_info.maxUniformBuffersPerDescriptor = 0;
+  table_info.maxStorageBuffersPerDescriptor = 1;
+  table_info.maxStorageImagesPerDescriptor = 0;
+  table_info.maxSampledImagesPerDescriptor = 0;
+  table_info.maxPipelineLayouts = 1;
+
+  VkResult result = device_->vkCreateObjectTableNVX(&table_info, nullptr, &object_table_);
+  if (result != VK_SUCCESS) {
+    throw std::runtime_error("Could not create object table.");
   }
 }
