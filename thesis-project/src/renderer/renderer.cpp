@@ -423,7 +423,7 @@ void Renderer::use_matrices(DirectX::CXMMATRIX view, DirectX::CXMMATRIX proj) {
 void Renderer::create_instance() {
   vk::InstanceBuilder builder;
 
-  builder.use_layer("VK_LAYER_LUNARG_standard_validation");
+  //builder.use_layer("VK_LAYER_LUNARG_standard_validation");
 
   builder.use_extension("VK_EXT_debug_report");
   builder.use_extension("VK_KHR_surface");
@@ -1306,6 +1306,7 @@ void Renderer::create_dgc_resources() {
   device_->physical_device()->vkGetPhysicalDeviceGeneratedCommandsPropertiesNVX(&features, &limits);
 
   create_object_table();
+  register_objects_in_table();
 }
 
 void Renderer::create_object_table() {
@@ -1343,5 +1344,29 @@ void Renderer::create_object_table() {
   VkResult result = device_->vkCreateObjectTableNVX(&table_info, nullptr, &object_table_);
   if (result != VK_SUCCESS) {
     throw std::runtime_error("Could not create object table.");
+  }
+}
+
+void Renderer::register_objects_in_table() {
+  // Note: resource bindings can be registered at arbitrary indices within a
+  // table.
+  VkObjectTablePipelineEntryNVX pipeline_entry {};
+  pipeline_entry.type = VK_OBJECT_ENTRY_TYPE_PIPELINE_NVX;
+  pipeline_entry.flags = VK_OBJECT_ENTRY_USAGE_GRAPHICS_BIT_NVX;
+  pipeline_entry.pipeline = gbuffer_pipeline_indirect_;
+
+  std::array<VkObjectTableEntryNVX const*, 1> table_entries {
+    reinterpret_cast<VkObjectTableEntryNVX*>(&pipeline_entry),
+  };
+
+  std::array<uint32_t, 1> object_indices {
+    0,
+  };
+
+  static_assert(table_entries.size() == object_indices.size());
+
+  VkResult result = device_->vkRegisterObjectsNVX(object_table_, table_entries.size(), table_entries.data(), object_indices.data());
+  if (result != VK_SUCCESS) {
+    throw std::runtime_error("Could not register objects into table.");
   }
 }

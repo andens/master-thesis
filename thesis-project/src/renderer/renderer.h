@@ -79,6 +79,7 @@ private:
   void update_gui_vertex_data(ImDrawData* draw_data);
   void create_dgc_resources();
   void create_object_table();
+  void register_objects_in_table();
 
 private:
   VkExtent2D render_area_ { 0, 0 };
