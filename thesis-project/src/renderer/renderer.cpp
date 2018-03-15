@@ -68,6 +68,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    device_->vkDestroyIndirectCommandsLayoutNVX(indirect_commands_layout_, nullptr);
     device_->vkDestroyObjectTableNVX(object_table_, nullptr);
     device_->vkUnmapMemory(indirect_buffer_->vulkan_memory_handle());
     indirect_buffer_->destroy(*device_);
