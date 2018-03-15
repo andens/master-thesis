@@ -80,6 +80,7 @@ private:
   void create_dgc_resources();
   void create_object_table();
   void register_objects_in_table();
+  void create_indirect_commands_layout();
 
 private:
   VkExtent2D render_area_ { 0, 0 };
@@ -148,6 +149,7 @@ private:
   uint32_t current_beta_draw_calls_ { 0 };
 
   VkObjectTableNVX object_table_ { VK_NULL_HANDLE };
+  VkIndirectCommandsLayoutNVX indirect_commands_layout_ { VK_NULL_HANDLE };
 
   DirectX::XMFLOAT4X4 view_ {};
   DirectX::XMFLOAT4X4 proj_ {};

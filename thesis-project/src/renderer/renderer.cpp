@@ -1307,6 +1307,7 @@ void Renderer::create_dgc_resources() {
 
   create_object_table();
   register_objects_in_table();
+  create_indirect_commands_layout();
 }
 
 void Renderer::create_object_table() {
@@ -1368,5 +1369,37 @@ void Renderer::register_objects_in_table() {
   VkResult result = device_->vkRegisterObjectsNVX(object_table_, table_entries.size(), table_entries.data(), object_indices.data());
   if (result != VK_SUCCESS) {
     throw std::runtime_error("Could not register objects into table.");
+  }
+}
+
+void Renderer::create_indirect_commands_layout() {
+  // Generating commands on the device is done by processing a sequence of
+  // tokens. The VkIndirectCommandsLayoutNVX describes this sequence. Actual
+  // data required by tokens are provided by VkBuffers when generating the
+  // commands.
+
+  std::array<VkIndirectCommandsLayoutTokenNVX, 2> tokens {};
+
+  tokens[0].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_PIPELINE_NVX;
+  tokens[0].bindingUnit = 0; // Not used for pipelines
+  tokens[0].dynamicCount = 0; // Not used for pipelines
+  tokens[0].divisor = 1;
+
+  tokens[1].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_DRAW_NVX;
+  tokens[1].bindingUnit = 0; // Not used for draw
+  tokens[1].dynamicCount = 0; // Not used for draw
+  tokens[1].divisor = 1;
+
+  VkIndirectCommandsLayoutCreateInfoNVX layout_info {};
+  layout_info.sType = VK_STRUCTURE_TYPE_INDIRECT_COMMANDS_LAYOUT_CREATE_INFO_NVX;
+  layout_info.pNext = nullptr;
+  layout_info.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+  layout_info.flags = VK_INDIRECT_COMMANDS_LAYOUT_USAGE_UNORDERED_SEQUENCES_BIT_NVX;
+  layout_info.tokenCount = static_cast<uint32_t>(tokens.size());
+  layout_info.pTokens = tokens.data();
+
+  VkResult result = device_->vkCreateIndirectCommandsLayoutNVX(&layout_info, nullptr, &indirect_commands_layout_);
+  if (result != VK_SUCCESS) {
+    throw std::runtime_error("Could not create indirect commands layout.");
   }
 }
