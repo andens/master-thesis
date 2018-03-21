@@ -32,6 +32,23 @@ target_include_directories(glfw PUBLIC externals/glfw/include)
 add_library(directx-math INTERFACE)
 target_include_directories(directx-math INTERFACE externals/DirectXMath/Inc)
 
+# dear imgui
+add_library(imgui STATIC "")
+target_include_directories(imgui INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/externals/imgui)
+target_sources(imgui
+  PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/externals/imgui/imgui.h
+  PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/externals/imgui/stb_rect_pack.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/externals/imgui/stb_textedit.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/externals/imgui/stb_truetype.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/externals/imgui/imgui_internal.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/externals/imgui/imgui.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/externals/imgui/imgui_demo.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/externals/imgui/imgui_draw.cpp
+)
+target_compile_definitions(imgui PUBLIC IMGUI_DISABLE_INCLUDE_IMCONFIG_H)
+
 # ┌──────────────────────────────────────────────────────────────────┐
 # │  Output directories and project parts                            │
 # └──────────────────────────────────────────────────────────────────┘
