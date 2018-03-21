@@ -21,7 +21,7 @@ void Scene::update(float delta_time, Renderer& renderer) {
       }
       else {
         box = !box;
-        cache.start_rendering(0, box ? RenderObject::Box : RenderObject::Sphere);
+        cache.start_rendering(0, box ? RenderObject::Box : RenderObject::Sphere, RenderCache::Pipeline::Alpha);
       }
     });
   }
@@ -32,7 +32,7 @@ Scene::Scene(Renderer& renderer) {
   renderer.update_transform(1, DirectX::XMMatrixTranslation(5.0f, 0.0f, 10.0f));
 
   renderer.borrow_render_cache([](RenderCache& cache) {
-    cache.start_rendering(0, RenderObject::Box);
-    cache.start_rendering(1, RenderObject::Sphere);
+    cache.start_rendering(0, RenderObject::Box, RenderCache::Pipeline::Alpha);
+    cache.start_rendering(1, RenderObject::Sphere, RenderCache::Pipeline::Alpha);
   });
 }

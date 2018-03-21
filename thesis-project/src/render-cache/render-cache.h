@@ -14,9 +14,15 @@
 // they are mapped.
 class RenderCache {
 public:
+  enum class Pipeline {
+    Alpha,
+    Beta,
+  };
+
   struct JobContext {
     uint32_t job { ~0u };
     RenderObject object_type;
+    Pipeline pipeline;
     void* user_data { nullptr };
   };
 
@@ -27,7 +33,7 @@ public:
   };
 
 public:
-  void start_rendering(uint32_t job, RenderObject object_type);
+  void start_rendering(uint32_t job, RenderObject object_type, Pipeline pipeline);
   void stop_rendering(uint32_t job);
   void dirtify(uint32_t job);
 
