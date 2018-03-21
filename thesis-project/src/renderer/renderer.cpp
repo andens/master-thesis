@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <fstream>
+#include <imgui.h>
 #include <iostream>
 #include <vector>
 #include <vulkan-helpers/buffer.h>
@@ -52,6 +53,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   configure_barrier_structs();
   create_vertex_buffer();
   create_indirect_buffer();
+  initialize_imgui();
 
   DirectX::XMStoreFloat4x4(&view_, DirectX::XMMatrixIdentity());
   DirectX::XMStoreFloat4x4(&proj_, DirectX::XMMatrixIdentity());
@@ -186,6 +188,8 @@ void Renderer::render() {
   }
 
   graphics_cmd_buf_->vkCmdEndRenderPass();
+
+  // TODO: Subpass to render ImGui to albedo? ImGui_ImplGlfwVulkan_Render
 
   graphics_cmd_buf_->vkEndCommandBuffer();
 
@@ -852,3 +856,57 @@ void Renderer::update_indirect_buffer() {
   });
 }
 #pragma pop_macro("max");
+
+void Renderer::initialize_imgui() {
+  // TODO: ImGui_ImplGlfwVulkan_CreateDeviceObjects
+
+  // Color scheme
+  //ImGuiStyle& style = ImGui::GetStyle();
+  //style.Colors[ImGuiCol_TitleBg] = ImVec4(1.0f, 0.0f, 0.0f, 0.6f);
+  //style.Colors[ImGuiCol_TitleBgActive] = ImVec4(1.0f, 0.0f, 0.0f, 0.8f);
+  //style.Colors[ImGuiCol_MenuBarBg] = ImVec4(1.0f, 0.0f, 0.0f, 0.4f);
+  //style.Colors[ImGuiCol_Header] = ImVec4(1.0f, 0.0f, 0.0f, 0.4f);
+  //style.Colors[ImGuiCol_CheckMark] = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+  ImGui::StyleColorsDark();
+
+  // Load font
+  // ImGui uses the default font if none is loaded. ImGui::PushFont / ImGui::PopFont
+  // Fonts are rasterized with ImFontAtlas::Build
+  //io.Fonts->AddFontDefault();
+  //io.Fonts->AddFontFromFileTTF("assets/fonts/Roboto-Medium.ttf", 16.0f);
+  //ImFont* saved_font = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, nullptr, io.Fonts->GetGlyphRangesJapanese());
+
+  create_imgui_font_texture();
+}
+
+void Renderer::create_imgui_font_texture() {
+  VkCommandBufferBeginInfo begin_info {};
+  begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  begin_info.pNext = nullptr;
+  begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+  begin_info.pInheritanceInfo = nullptr;
+  graphics_cmd_buf_->vkBeginCommandBuffer(&begin_info);
+
+  ImGuiIO& io = ImGui::GetIO();
+  unsigned char* texels;
+  int width, height;
+  io.Fonts->GetTexDataAsRGBA32(&texels, &width, &height);
+
+  graphics_cmd_buf_->vkEndCommandBuffer();
+
+  VkCommandBuffer cmd_buf = graphics_cmd_buf_->command_buffer();
+  VkSubmitInfo submit_info {};
+  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submit_info.pNext = nullptr;
+  submit_info.commandBufferCount = 1;
+  submit_info.pCommandBuffers = &cmd_buf;
+  submit_info.waitSemaphoreCount = 0;
+  submit_info.pWaitDstStageMask = nullptr;
+  submit_info.pWaitSemaphores = nullptr;
+  submit_info.signalSemaphoreCount = 0;
+  submit_info.pSignalSemaphores = nullptr;
+  graphics_queue_->vkQueueSubmit(1, &submit_info, VK_NULL_HANDLE);
+  device_->vkDeviceWaitIdle();
+
+  // invalidate font upload objects
+}

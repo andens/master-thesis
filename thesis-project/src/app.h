@@ -4,6 +4,7 @@
 #include <memory>
 
 class Camera;
+class GLFWcursor;
 class GLFWwindow;
 class Renderer;
 class Scene;
@@ -21,6 +22,7 @@ private:
 
 private:
   GLFWwindow* window_ { nullptr };
+  GLFWcursor** mouse_cursors_ { nullptr };
   uint32_t window_width_ { 1280 };
   uint32_t window_height_ { 720 };
   std::unique_ptr<Renderer> renderer_;

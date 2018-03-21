@@ -71,6 +71,8 @@ private:
   void create_descriptor_sets();
   void create_indirect_buffer();
   void update_indirect_buffer();
+  void initialize_imgui();
+  void create_imgui_font_texture();
 
 private:
   VkExtent2D render_area_ { 0, 0 };
