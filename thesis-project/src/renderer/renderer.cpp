@@ -131,6 +131,10 @@ void Renderer::render() {
 
   graphics_cmd_buf_->vkCmdBeginRenderPass(&render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
 
+  // TODO: These two pipelines are not necessary. Change into the alpha and beta
+  // ones (perhaps where one uses wireframe and the other solid). Direct rendering
+  // would then want to enumerate with a filter and indirect uses one indirect
+  // draw per pipeline, using count and offset accordingly.
   if (render_indirectly_) {
     graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer_pipeline_indirect_);
   }
@@ -171,7 +175,8 @@ void Renderer::render() {
   graphics_cmd_buf_->vkCmdBindVertexBuffers(0, 1, &vertex_buf, &offset);
   if (render_indirectly_) {
     update_indirect_buffer();
-    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, current_draw_calls_, sizeof(VkDrawIndirectCommand));
+    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, current_alpha_draw_calls_, sizeof(VkDrawIndirectCommand));
+    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), max_draw_calls_ - current_beta_draw_calls_, current_beta_draw_calls_, sizeof(VkDrawIndirectCommand));
   }
   else {
     render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
@@ -779,9 +784,10 @@ void Renderer::create_indirect_buffer() {
 #undef max
 void Renderer::update_indirect_buffer() {
   render_cache_->enumerate_changes([this](RenderCache::Change change, RenderCache::JobContext const& job_context) -> void* {
+    assert(current_total_draw_calls_ != max_draw_calls_);
     size_t indirect_buffer_element { std::numeric_limits<size_t>::max() };
     if (change == RenderCache::Change::Add) {
-      indirect_buffer_element = current_draw_calls_;
+      indirect_buffer_element = job_context.pipeline == RenderCache::Pipeline::Alpha ? current_alpha_draw_calls_ : max_draw_calls_ - 1 - current_beta_draw_calls_;
     }
     else {
       assert(change == RenderCache::Change::Modify || change == RenderCache::Change::Remove);
@@ -805,9 +811,22 @@ void Renderer::update_indirect_buffer() {
     }
     else {
       assert(change == RenderCache::Change::Remove);
-      if (indirect_buffer_element + 1 < current_draw_calls_) {
-        VkDrawIndirectCommand* removed_command = mapped_indirect_buffer_ + indirect_buffer_element;
-        VkDrawIndirectCommand* last_command = mapped_indirect_buffer_ + (current_draw_calls_ - 1);
+      VkDrawIndirectCommand* removed_command = mapped_indirect_buffer_ + indirect_buffer_element;
+      VkDrawIndirectCommand* last_command { nullptr };
+
+      if (job_context.pipeline == RenderCache::Pipeline::Alpha) {
+        assert(current_alpha_draw_calls_ > 0);
+        last_command = mapped_indirect_buffer_ + (current_alpha_draw_calls_ - 1);
+      }
+      else {
+        assert(job_context.pipeline == RenderCache::Pipeline::Beta && current_beta_draw_calls_ > 0);
+        last_command = mapped_indirect_buffer_ + (max_draw_calls_ - current_beta_draw_calls_);
+      }
+
+      // If we removed something other than the bucket head, we move the head
+      // into it's slot and flush the new data to the GPU. This avoids holes
+      // when removing draw calls.
+      if (removed_command != last_command) {
         *removed_command = *last_command;
 
         VkMappedMemoryRange flush_range {};
@@ -821,10 +840,12 @@ void Renderer::update_indirect_buffer() {
     }
 
     if (change == RenderCache::Change::Add) {
-      current_draw_calls_++;
+      job_context.pipeline == RenderCache::Pipeline::Alpha ? current_alpha_draw_calls_++ : current_beta_draw_calls_++;
+      current_total_draw_calls_++;
     }
     else if (change == RenderCache::Change::Remove) {
-      current_draw_calls_--;
+      job_context.pipeline == RenderCache::Pipeline::Alpha ? current_alpha_draw_calls_-- : current_beta_draw_calls_--;
+      current_total_draw_calls_--;
     }
 
     return reinterpret_cast<void*>(indirect_buffer_element);

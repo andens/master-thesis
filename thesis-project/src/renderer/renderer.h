@@ -112,11 +112,18 @@ private:
 
   std::unique_ptr<RenderCache> render_cache_;
 
+  // Note: My draw call management is hardcoded to two different pipelines
+  // because it eases implementation as I can manage the indirect buffer as a
+  // double-ended stack. This essentially corresponds to two buckets of dynamic
+  // size. In a real world scenario one may want more elaborate infrastructure
+  // that tracks an arbitrary amount of (likely equisized) buckets.
   bool render_indirectly_ { true };
   VkDrawIndirectCommand* mapped_indirect_buffer_ { nullptr };
   std::unique_ptr<vk::Buffer> indirect_buffer_;
   const uint32_t max_draw_calls_ { 2000 };
-  uint32_t current_draw_calls_ { 0 };
+  uint32_t current_total_draw_calls_ { 0 };
+  uint32_t current_alpha_draw_calls_ { 0 };
+  uint32_t current_beta_draw_calls_ { 0 };
 
   DirectX::XMFLOAT4X4 view_ {};
   DirectX::XMFLOAT4X4 proj_ {};
