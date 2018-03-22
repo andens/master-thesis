@@ -78,6 +78,8 @@ Renderer::~Renderer() {
     device_->vkDestroyShaderModule(fullscreen_triangle_vs_, nullptr);
     device_->vkDestroyShaderModule(fill_gbuffer_vs_, nullptr);
     device_->vkDestroyShaderModule(fill_gbuffer_fs_, nullptr);
+    device_->vkDestroyShaderModule(gui_vs_, nullptr);
+    device_->vkDestroyShaderModule(gui_fs_, nullptr);
     device_->vkDestroyFramebuffer(framebuffer_, nullptr);
     device_->vkDestroyRenderPass(gbuffer_render_pass_, nullptr);
     render_jobs_descriptor_set_->destroy(*device_);
@@ -502,6 +504,8 @@ void Renderer::create_shaders() {
   create_shader("shaders/fullscreen-triangle-vs.spv", fullscreen_triangle_vs_);
   create_shader("shaders/fill-gbuffer-vs.spv", fill_gbuffer_vs_);
   create_shader("shaders/fill-gbuffer-ps.spv", fill_gbuffer_fs_);
+  create_shader("shaders/gui-vs.spv", gui_vs_);
+  create_shader("shaders/gui-ps.spv", gui_fs_);
 }
 
 void Renderer::create_pipeline() {
