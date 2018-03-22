@@ -1056,6 +1056,11 @@ void Renderer::create_imgui_font_texture() {
     }
   }
 
+  // Make the GUI descriptor set use the font image
+  {
+    gui_descriptor_set_->use_font_image(*device_, gui_font_image_view_, gui_font_sampler_);
+  }
+
   // TODO: create upload buffer, upload data, release temporary resources
 
   VkCommandBufferBeginInfo begin_info {};

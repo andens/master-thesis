@@ -15,6 +15,7 @@ public:
   void destroy(vk::Device& device);
   vk::DescriptorSetLayout const& layout() const;
   vk::DescriptorSet const& set() const;
+  void use_font_image(vk::Device& device, VkImageView view, VkSampler sampler);
 
   GuiDescriptorSet(vk::Device& device, vk::DescriptorPool& pool, VkSampler sampler);
   ~GuiDescriptorSet();
