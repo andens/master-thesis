@@ -112,7 +112,10 @@ private:
   VkFence gbuffer_generation_fence_ { VK_NULL_HANDLE };
   VkImageMemoryBarrier present_to_transfer_barrier_ {};
   VkImageMemoryBarrier transfer_to_present_barrier_ {};
-  VkSampler gui_font_sampler_{ VK_NULL_HANDLE };
+  VkSampler gui_font_sampler_ { VK_NULL_HANDLE };
+  VkImage gui_font_image_ { VK_NULL_HANDLE };
+  VkDeviceMemory gui_font_image_memory_ { VK_NULL_HANDLE };
+  VkImageView gui_font_image_view_ { VK_NULL_HANDLE };
 
   std::unique_ptr<vk::Buffer> vertex_buffer_;
 

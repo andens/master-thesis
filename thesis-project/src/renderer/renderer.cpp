@@ -17,6 +17,7 @@
 #include <vulkan-helpers/device_builder.h>
 #include <vulkan-helpers/instance.h>
 #include <vulkan-helpers/instance_builder.h>
+#include <vulkan-helpers/physical_device.h>
 #include <vulkan-helpers/pipeline_builder.h>
 #include <vulkan-helpers/pipeline_layout_builder.h>
 #include <vulkan-helpers/pipeline_vertex_layout.h>
@@ -69,6 +70,9 @@ Renderer::~Renderer() {
     device_->vkUnmapMemory(indirect_buffer_->vulkan_memory_handle());
     indirect_buffer_->destroy(*device_);
     vertex_buffer_->destroy(*device_);
+    device_->vkDestroyImageView(gui_font_image_view_, nullptr);
+    device_->vkDestroyImage(gui_font_image_, nullptr);
+    device_->vkFreeMemory(gui_font_image_memory_, nullptr);
     device_->vkDestroySampler(gui_font_sampler_, nullptr);
     device_->vkDestroyFence(gbuffer_generation_fence_, nullptr);
     device_->vkDestroyFence(render_fence_, nullptr);
@@ -948,8 +952,6 @@ void Renderer::update_indirect_buffer() {
 #pragma pop_macro("max");
 
 void Renderer::initialize_imgui() {
-  // TODO: ImGui_ImplGlfwVulkan_CreateDeviceObjects
-
   // Color scheme
   //ImGuiStyle& style = ImGui::GetStyle();
   //style.Colors[ImGuiCol_TitleBg] = ImVec4(1.0f, 0.0f, 0.0f, 0.6f);
@@ -970,17 +972,98 @@ void Renderer::initialize_imgui() {
 }
 
 void Renderer::create_imgui_font_texture() {
+  ImGuiIO& io = ImGui::GetIO();
+  unsigned char* texels;
+  int width, height;
+  io.Fonts->GetTexDataAsRGBA32(&texels, &width, &height);
+
+  // Create image
+  {
+    VkImageCreateInfo image_info {};
+    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_info.pNext = nullptr;
+    image_info.flags = 0;
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.format = VK_FORMAT_R8G8B8A8_UNORM;
+    image_info.extent.width = width;
+    image_info.extent.height = height;
+    image_info.extent.depth = 1;
+    image_info.mipLevels = 1;
+    image_info.arrayLayers = 1;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    image_info.queueFamilyIndexCount = 0;
+    image_info.pQueueFamilyIndices = nullptr;
+    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VkResult result = device_->vkCreateImage(&image_info, nullptr, &gui_font_image_);
+    if (result != VK_SUCCESS) {
+      throw std::runtime_error("Could not create GUI font image.");
+    }
+  }
+
+  // Allocate and bind image memory
+  {
+    VkMemoryRequirements mem_req {};
+    device_->vkGetImageMemoryRequirements(gui_font_image_, &mem_req);
+
+    VkMemoryAllocateInfo alloc_info {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.pNext = nullptr;
+    alloc_info.allocationSize = mem_req.size;
+    alloc_info.memoryTypeIndex = 0;
+
+    VkMemoryPropertyFlagBits desired_props = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    auto const& mem_props = device_->physical_device()->memory_properties();
+    for (uint32_t i = 0; i < mem_props.memoryTypeCount; ++i) {
+      // Current memory type (i) suitable and the memory type has desired properties.
+      if ((mem_req.memoryTypeBits & (1 << i)) && ((mem_props.memoryTypes[i].propertyFlags & desired_props) == desired_props)) {
+        alloc_info.memoryTypeIndex = i;
+        break;
+      }
+    }
+
+    VkResult result = device_->vkAllocateMemory(&alloc_info, nullptr, &gui_font_image_memory_);
+    if (result != VK_SUCCESS) {
+      throw std::runtime_error("Could not allocate memory for GUI font image.");
+    }
+
+    result = device_->vkBindImageMemory(gui_font_image_, gui_font_image_memory_, 0);
+    if (result != VK_SUCCESS) {
+      throw std::runtime_error("Could not bind GUI font image to memory.");
+    }
+  }
+
+  // Create image view
+  {
+    VkImageViewCreateInfo view_info {};
+    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view_info.pNext = nullptr;
+    view_info.flags = 0;
+    view_info.image = gui_font_image_;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_info.format = VK_FORMAT_R8G8B8A8_UNORM;
+    view_info.components = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
+    view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    view_info.subresourceRange.baseMipLevel = 0;
+    view_info.subresourceRange.levelCount = 1;
+    view_info.subresourceRange.baseArrayLayer = 0;
+    view_info.subresourceRange.layerCount = 1;
+    VkResult result = device_->vkCreateImageView(&view_info, nullptr, &gui_font_image_view_);
+    if (result != VK_SUCCESS) {
+      throw std::runtime_error("Could not create GUI font image view.");
+    }
+  }
+
+  // TODO: create upload buffer, upload data, release temporary resources
+
   VkCommandBufferBeginInfo begin_info {};
   begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   begin_info.pNext = nullptr;
   begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
   begin_info.pInheritanceInfo = nullptr;
   graphics_cmd_buf_->vkBeginCommandBuffer(&begin_info);
-
-  ImGuiIO& io = ImGui::GetIO();
-  unsigned char* texels;
-  int width, height;
-  io.Fonts->GetTexDataAsRGBA32(&texels, &width, &height);
 
   graphics_cmd_buf_->vkEndCommandBuffer();
 
@@ -998,5 +1081,5 @@ void Renderer::create_imgui_font_texture() {
   graphics_queue_->vkQueueSubmit(1, &submit_info, VK_NULL_HANDLE);
   device_->vkDeviceWaitIdle();
 
-  // invalidate font upload objects
+  // TODO: invalidate font upload objects
 }
