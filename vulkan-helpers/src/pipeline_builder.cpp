@@ -100,6 +100,22 @@ void PipelineBuilder::rs_fill_cull_back() {
   rasterization_info_.depthBiasSlopeFactor = 0.0f;
 }
 
+void PipelineBuilder::rs_fill_cull_none() {
+  rasterization_info_.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+  rasterization_info_.pNext = nullptr;
+  rasterization_info_.flags = 0;
+  rasterization_info_.depthClampEnable = VK_FALSE;
+  rasterization_info_.rasterizerDiscardEnable = VK_FALSE;
+  rasterization_info_.polygonMode = VK_POLYGON_MODE_FILL;
+  rasterization_info_.lineWidth = 1.0f;
+  rasterization_info_.cullMode = VK_CULL_MODE_NONE;
+  rasterization_info_.frontFace = VK_FRONT_FACE_CLOCKWISE;
+  rasterization_info_.depthBiasEnable = VK_FALSE;
+  rasterization_info_.depthBiasConstantFactor = 0.0f;
+  rasterization_info_.depthBiasClamp = 0.0f;
+  rasterization_info_.depthBiasSlopeFactor = 0.0f;
+}
+
 void PipelineBuilder::ms_none() {
   // Sampling configuration
   multisample_info_.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -134,6 +150,21 @@ void PipelineBuilder::ds_enabled() {
   depth_stencil_info_.minDepthBounds = 0.0f;
   depth_stencil_info_.maxDepthBounds = 1.0f;
   // Not using stencil right now.
+  depth_stencil_info_.stencilTestEnable = VK_FALSE;
+  depth_stencil_info_.front = {};
+  depth_stencil_info_.back = {};
+}
+
+void PipelineBuilder::ds_none() {
+  depth_stencil_info_.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+  depth_stencil_info_.pNext = nullptr;
+  depth_stencil_info_.flags = 0;
+  depth_stencil_info_.depthTestEnable = VK_FALSE;
+  depth_stencil_info_.depthWriteEnable = VK_FALSE;
+  depth_stencil_info_.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
+  depth_stencil_info_.depthBoundsTestEnable = VK_FALSE;
+  depth_stencil_info_.minDepthBounds = 0.0f;
+  depth_stencil_info_.maxDepthBounds = 1.0f;
   depth_stencil_info_.stencilTestEnable = VK_FALSE;
   depth_stencil_info_.front = {};
   depth_stencil_info_.back = {};
@@ -189,11 +220,38 @@ void PipelineBuilder::bs_none(uint32_t attachment_count) {
   blend_info_.blendConstants[3] = 0.0f;
 }
 
+void PipelineBuilder::bs_hardcoded_single_attachment_alpha_blend_because_lazy() {
+  blend_attachment_states_.clear();
+  blend_attachment_states_.resize(1);
+  for (auto& attachment_state : blend_attachment_states_) {
+    attachment_state.blendEnable = VK_TRUE;
+    attachment_state.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    attachment_state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    attachment_state.colorBlendOp = VK_BLEND_OP_ADD;
+    attachment_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA; // Not one?
+    attachment_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    attachment_state.alphaBlendOp = VK_BLEND_OP_ADD;
+    attachment_state.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+  }
+
+  blend_info_.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+  blend_info_.pNext = nullptr;
+  blend_info_.flags = 0;
+  blend_info_.logicOpEnable = VK_FALSE;
+  blend_info_.logicOp = VK_LOGIC_OP_CLEAR;
+  blend_info_.attachmentCount = static_cast<uint32_t>(blend_attachment_states_.size());
+  blend_info_.pAttachments = blend_attachment_states_.data();
+  blend_info_.blendConstants[0] = 0.0f;
+  blend_info_.blendConstants[1] = 0.0f;
+  blend_info_.blendConstants[2] = 0.0f;
+  blend_info_.blendConstants[3] = 0.0f;
+}
+
 void PipelineBuilder::dynamic_state(std::initializer_list<VkDynamicState> states) {
   dynamic_states_.insert(dynamic_states_.end(), states.begin(), states.end());
 }
 
-VkPipeline PipelineBuilder::build(Device& device, VkPipelineLayout pipeline_layout, VkRenderPass render_pass) {
+VkPipeline PipelineBuilder::build(Device& device, VkPipelineLayout pipeline_layout, VkRenderPass render_pass, uint32_t subpass) {
   if (!vertex_layout_) {
     vertex_layout_ = std::unique_ptr<PipelineVertexLayout>(new PipelineVertexLayout);
   }
@@ -247,7 +305,7 @@ VkPipeline PipelineBuilder::build(Device& device, VkPipelineLayout pipeline_layo
   // Pipeline can be used with any render pass compatible with this one.
   pipeline_info.renderPass = render_pass;
   // Index of the subpass in which the pipeline will be used.
-  pipeline_info.subpass = 0;
+  pipeline_info.subpass = subpass;
   // Pipeline this one should derive from.
   pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
   // Index of a pipeline this one should derive from (when creating multiple

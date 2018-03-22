@@ -32,14 +32,17 @@ public:
   void vp_dynamic();
   // rs: rasterizer state
   void rs_fill_cull_back();
+  void rs_fill_cull_none();
   // ms: multisample state
   void ms_none();
   // ds: depth/stencil
   void ds_enabled();
+  void ds_none();
   // bs: blend state
   void bs_none(uint32_t attachment_count);
+  void bs_hardcoded_single_attachment_alpha_blend_because_lazy();
   void dynamic_state(std::initializer_list<VkDynamicState> states);
-  VkPipeline build(Device& device, VkPipelineLayout pipeline_layout, VkRenderPass render_pass);
+  VkPipeline build(Device& device, VkPipelineLayout pipeline_layout, VkRenderPass render_pass, uint32_t subpass);
 
 private:
   struct ShaderSpecialization {

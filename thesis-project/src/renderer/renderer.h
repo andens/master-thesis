@@ -104,6 +104,7 @@ private:
   VkPipelineLayout gui_pipeline_layout_{ VK_NULL_HANDLE };
   VkPipeline gbuffer_pipeline_direct_ { VK_NULL_HANDLE };
   VkPipeline gbuffer_pipeline_indirect_ { VK_NULL_HANDLE };
+  VkPipeline gui_pipeline_{ VK_NULL_HANDLE };
   VkSemaphore image_available_semaphore_ { VK_NULL_HANDLE };
   VkSemaphore blit_swapchain_complete_ { VK_NULL_HANDLE };
   VkSemaphore gbuffer_generation_complete_ { VK_NULL_HANDLE };

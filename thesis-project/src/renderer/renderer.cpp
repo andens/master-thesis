@@ -77,6 +77,7 @@ Renderer::~Renderer() {
     device_->vkDestroySemaphore(image_available_semaphore_, nullptr);
     device_->vkDestroyPipeline(gbuffer_pipeline_direct_, nullptr);
     device_->vkDestroyPipeline(gbuffer_pipeline_indirect_, nullptr);
+    device_->vkDestroyPipeline(gui_pipeline_, nullptr);
     device_->vkDestroyPipelineLayout(gbuffer_pipeline_layout_, nullptr);
     device_->vkDestroyPipelineLayout(gui_pipeline_layout_, nullptr);
     device_->vkDestroyShaderModule(fullscreen_triangle_vs_, nullptr);
@@ -576,16 +577,42 @@ void Renderer::create_pipeline() {
     VK_DYNAMIC_STATE_SCISSOR
   });
 
-  gbuffer_pipeline_direct_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_);
+  gbuffer_pipeline_direct_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
 
   spec_data.indirect_rendering = 1;
 
-  gbuffer_pipeline_indirect_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_);
+  gbuffer_pipeline_indirect_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
 
   vk::PipelineLayoutBuilder gui_layout_builder;
   gui_layout_builder.push_constant(VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 4); // GUI scaling and translation
   gui_layout_builder.descriptor_layout(gui_descriptor_set_->layout().vulkan_handle());
   gui_pipeline_layout_ = gui_layout_builder.build(*device_);
+
+  vk::PipelineBuilder gui_pipeline_builder;
+
+  gui_pipeline_builder.shader_stage(VK_SHADER_STAGE_VERTEX_BIT, gui_vs_);
+  gui_pipeline_builder.shader_stage(VK_SHADER_STAGE_FRAGMENT_BIT, gui_fs_);
+
+  gui_pipeline_builder.vertex_layout([](auto& layout) {
+    layout.stream(0, sizeof(ImDrawVert), VK_VERTEX_INPUT_RATE_VERTEX);
+    layout.attribute(0, VK_FORMAT_R32G32_SFLOAT, (size_t)(&((ImDrawVert*)0)->pos));
+    layout.attribute(1, VK_FORMAT_R32G32_SFLOAT, (size_t)(&((ImDrawVert*)0)->uv));
+    layout.attribute(2, VK_FORMAT_R8G8B8A8_UNORM, (size_t)(&((ImDrawVert*)0)->col));
+  });
+
+  gui_pipeline_builder.ia_triangle_list();
+  gui_pipeline_builder.vp_dynamic();
+  gui_pipeline_builder.rs_fill_cull_none();
+  gui_pipeline_builder.ms_none();
+  gui_pipeline_builder.ds_none();
+  gui_pipeline_builder.bs_hardcoded_single_attachment_alpha_blend_because_lazy();
+  gui_pipeline_builder.dynamic_state({
+    VK_DYNAMIC_STATE_VIEWPORT,
+    VK_DYNAMIC_STATE_SCISSOR
+  });
+
+  // TODO: subpass 1
+  gui_pipeline_ = gui_pipeline_builder.build(*device_, gui_pipeline_layout_, gbuffer_render_pass_, 0);
 }
 
 void Renderer::create_synchronization_primitives() {
