@@ -12,6 +12,15 @@ void DescriptorSetLayoutBuilder::sampler(VkShaderStageFlags shader_stages, uint3
   });
 }
 
+void DescriptorSetLayoutBuilder::combined_image_sampler(VkShaderStageFlags shader_stages, uint32_t count, VkSampler const* samplers) {
+  next_binding([shader_stages, count, samplers](auto& binding) {
+    binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    binding.descriptorCount = count;
+    binding.stageFlags = shader_stages;
+    binding.pImmutableSamplers = samplers;
+  });
+}
+
 void DescriptorSetLayoutBuilder::storage_buffer(VkShaderStageFlags shader_stages, uint32_t count) {
   next_binding([shader_stages, count](auto& binding) {
     binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;

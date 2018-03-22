@@ -12,6 +12,7 @@ class Device;
 class DescriptorSetLayoutBuilder {
 public:
   void sampler(VkShaderStageFlags shader_stages, uint32_t count);
+  void combined_image_sampler(VkShaderStageFlags shader_stages, uint32_t count, VkSampler const* sampler);
   void storage_buffer(VkShaderStageFlags shader_stages, uint32_t count);
   void storage_texel_buffer(VkShaderStageFlags shader_stages, uint32_t count);
   void uniform_buffer(VkShaderStageFlags shader_stages, uint32_t count);

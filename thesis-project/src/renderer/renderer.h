@@ -6,6 +6,7 @@
 #include <vector>
 #include <vulkan-helpers/vulkan_include.inl>
 
+class GuiDescriptorSet;
 class Mesh;
 class RenderCache;
 class RenderJobsDescriptorSet;
@@ -58,6 +59,7 @@ private:
   void create_device();
   void create_swapchain();
   void create_command_pools_and_buffers();
+  void create_samplers();
   void create_render_pass();
   void create_framebuffer();
   void create_shaders();
@@ -114,6 +116,7 @@ private:
 
   std::unique_ptr<vk::DescriptorPool> descriptor_pool_;
   std::unique_ptr<RenderJobsDescriptorSet> render_jobs_descriptor_set_;
+  std::unique_ptr<GuiDescriptorSet> gui_descriptor_set_;
 
   std::unique_ptr<RenderCache> render_cache_;
 

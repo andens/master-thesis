@@ -27,6 +27,7 @@
 #include <vulkan-helpers/vk_dispatch_tables.h>
 #include "../depth-buffer/depth_buffer.h"
 #include "../gbuffer/gbuffer.h"
+#include "../gui-descriptor-set/gui-descriptor-set.h"
 #include "../mesh/mesh.h"
 #include "../obj-loader/obj-loader.h"
 #include "../render-cache/render-cache.h"
@@ -44,6 +45,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   create_command_pools_and_buffers();
   depth_buffer_.reset(new graphics::DepthBuffer(device_.get(), render_area_.width, render_area_.height, VK_FORMAT_D32_SFLOAT, *blit_swapchain_cmd_buf_, *graphics_queue_));
   gbuffer_.reset(new graphics::deferred_shading::GBuffer(device_.get(), render_area_.width, render_area_.height));
+  create_samplers();
   create_descriptor_sets();
   create_render_pass();
   create_framebuffer();
@@ -84,6 +86,7 @@ Renderer::~Renderer() {
     device_->vkDestroyFramebuffer(framebuffer_, nullptr);
     device_->vkDestroyRenderPass(gbuffer_render_pass_, nullptr);
     render_jobs_descriptor_set_->destroy(*device_);
+    gui_descriptor_set_->destroy(*device_);
     descriptor_pool_->destroy(*device_);
     gbuffer_.reset();
     depth_buffer_.reset();
@@ -407,6 +410,32 @@ void Renderer::create_command_pools_and_buffers() {
 
   transient_graphics_cmd_pool_ = vk::CommandPool::make_transient(device_->graphics_family(), device_);
   blit_swapchain_cmd_buf_ = transient_graphics_cmd_pool_->allocate_primary();
+}
+
+void Renderer::create_samplers() {
+  VkSamplerCreateInfo sampler_info = {};
+  sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+  sampler_info.pNext = nullptr;
+  sampler_info.flags = 0;
+  sampler_info.magFilter = VK_FILTER_LINEAR;
+  sampler_info.minFilter = VK_FILTER_LINEAR;
+  sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+  sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+  sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+  sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+  sampler_info.mipLodBias = 0.0f;
+  sampler_info.anisotropyEnable = VK_FALSE;
+  sampler_info.maxAnisotropy = 1.0f;
+  sampler_info.compareEnable = VK_FALSE;
+  sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
+  sampler_info.minLod = 0.0f;
+  sampler_info.maxLod = 0.0f;
+  sampler_info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+  sampler_info.unnormalizedCoordinates = VK_FALSE;
+  VkResult result = device_->vkCreateSampler(&sampler_info, nullptr, &gui_font_sampler_);
+  if (result != VK_SUCCESS) {
+    throw std::runtime_error("Could not create sampler for GUI font.");
+  }
 }
 
 void Renderer::create_render_pass() {
@@ -751,10 +780,12 @@ void Renderer::interleave_vertex_data(Mesh* mesh, std::vector<Vertex>& vertices)
 void Renderer::create_descriptor_sets() {
   vk::DescriptorPoolBuilder builder;
   builder.reserve(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1);
-  builder.max_sets(1);
+  builder.reserve(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1);
+  builder.max_sets(2);
   descriptor_pool_.reset(new vk::DescriptorPool { *device_, builder });
 
   render_jobs_descriptor_set_.reset(new RenderJobsDescriptorSet { *device_, *descriptor_pool_ });
+  gui_descriptor_set_.reset(new GuiDescriptorSet{ *device_, *descriptor_pool_, gui_font_sampler_});
 }
 
 void Renderer::create_indirect_buffer() {
@@ -864,31 +895,6 @@ void Renderer::update_indirect_buffer() {
 
 void Renderer::initialize_imgui() {
   // TODO: ImGui_ImplGlfwVulkan_CreateDeviceObjects
-  {
-    VkSamplerCreateInfo sampler_info = {};
-    sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    sampler_info.pNext = nullptr;
-    sampler_info.flags = 0;
-    sampler_info.magFilter = VK_FILTER_LINEAR;
-    sampler_info.minFilter = VK_FILTER_LINEAR;
-    sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    sampler_info.mipLodBias = 0.0f;
-    sampler_info.anisotropyEnable = VK_FALSE;
-    sampler_info.maxAnisotropy = 1.0f;
-    sampler_info.compareEnable = VK_FALSE;
-    sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
-    sampler_info.minLod = 0.0f;
-    sampler_info.maxLod = 0.0f;
-    sampler_info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-    sampler_info.unnormalizedCoordinates = VK_FALSE;
-    VkResult result = device_->vkCreateSampler(&sampler_info, nullptr, &gui_font_sampler_);
-    if (result != VK_SUCCESS) {
-      throw std::runtime_error("Could not create sampler for GUI font.");
-    }
-  }
 
   // Color scheme
   //ImGuiStyle& style = ImGui::GetStyle();
