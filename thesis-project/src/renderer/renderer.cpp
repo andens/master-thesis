@@ -67,6 +67,7 @@ Renderer::~Renderer() {
     device_->vkUnmapMemory(indirect_buffer_->vulkan_memory_handle());
     indirect_buffer_->destroy(*device_);
     vertex_buffer_->destroy(*device_);
+    device_->vkDestroySampler(gui_font_sampler_, nullptr);
     device_->vkDestroyFence(gbuffer_generation_fence_, nullptr);
     device_->vkDestroyFence(render_fence_, nullptr);
     device_->vkDestroySemaphore(gbuffer_generation_complete_, nullptr);
@@ -863,6 +864,31 @@ void Renderer::update_indirect_buffer() {
 
 void Renderer::initialize_imgui() {
   // TODO: ImGui_ImplGlfwVulkan_CreateDeviceObjects
+  {
+    VkSamplerCreateInfo sampler_info = {};
+    sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler_info.pNext = nullptr;
+    sampler_info.flags = 0;
+    sampler_info.magFilter = VK_FILTER_LINEAR;
+    sampler_info.minFilter = VK_FILTER_LINEAR;
+    sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_info.mipLodBias = 0.0f;
+    sampler_info.anisotropyEnable = VK_FALSE;
+    sampler_info.maxAnisotropy = 1.0f;
+    sampler_info.compareEnable = VK_FALSE;
+    sampler_info.compareOp = VK_COMPARE_OP_ALWAYS;
+    sampler_info.minLod = 0.0f;
+    sampler_info.maxLod = 0.0f;
+    sampler_info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+    sampler_info.unnormalizedCoordinates = VK_FALSE;
+    VkResult result = device_->vkCreateSampler(&sampler_info, nullptr, &gui_font_sampler_);
+    if (result != VK_SUCCESS) {
+      throw std::runtime_error("Could not create sampler for GUI font.");
+    }
+  }
 
   // Color scheme
   //ImGuiStyle& style = ImGui::GetStyle();
