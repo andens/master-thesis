@@ -78,6 +78,7 @@ Renderer::~Renderer() {
     device_->vkDestroyPipeline(gbuffer_pipeline_direct_, nullptr);
     device_->vkDestroyPipeline(gbuffer_pipeline_indirect_, nullptr);
     device_->vkDestroyPipelineLayout(gbuffer_pipeline_layout_, nullptr);
+    device_->vkDestroyPipelineLayout(gui_pipeline_layout_, nullptr);
     device_->vkDestroyShaderModule(fullscreen_triangle_vs_, nullptr);
     device_->vkDestroyShaderModule(fill_gbuffer_vs_, nullptr);
     device_->vkDestroyShaderModule(fill_gbuffer_fs_, nullptr);
@@ -580,6 +581,11 @@ void Renderer::create_pipeline() {
   spec_data.indirect_rendering = 1;
 
   gbuffer_pipeline_indirect_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_);
+
+  vk::PipelineLayoutBuilder gui_layout_builder;
+  gui_layout_builder.push_constant(VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 4); // GUI scaling and translation
+  gui_layout_builder.descriptor_layout(gui_descriptor_set_->layout().vulkan_handle());
+  gui_pipeline_layout_ = gui_layout_builder.build(*device_);
 }
 
 void Renderer::create_synchronization_primitives() {

@@ -101,6 +101,7 @@ private:
   VkShaderModule gui_vs_{ VK_NULL_HANDLE };
   VkShaderModule gui_fs_{ VK_NULL_HANDLE };
   VkPipelineLayout gbuffer_pipeline_layout_ { VK_NULL_HANDLE };
+  VkPipelineLayout gui_pipeline_layout_{ VK_NULL_HANDLE };
   VkPipeline gbuffer_pipeline_direct_ { VK_NULL_HANDLE };
   VkPipeline gbuffer_pipeline_indirect_ { VK_NULL_HANDLE };
   VkSemaphore image_available_semaphore_ { VK_NULL_HANDLE };
