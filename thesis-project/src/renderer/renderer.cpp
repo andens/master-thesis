@@ -195,9 +195,11 @@ void Renderer::render() {
     });
   }
 
-  graphics_cmd_buf_->vkCmdEndRenderPass();
+  graphics_cmd_buf_->vkCmdNextSubpass(VK_SUBPASS_CONTENTS_INLINE);
 
-  // TODO: Subpass to render ImGui to albedo? ImGui_ImplGlfwVulkan_Render
+  // TODO: ImGui_ImplGlfwVulkan_Render
+
+  graphics_cmd_buf_->vkCmdEndRenderPass();
 
   graphics_cmd_buf_->vkEndCommandBuffer();
 
@@ -448,11 +450,21 @@ void Renderer::create_render_pass() {
     builder.attachment(vk::RenderPassAttachment::c_clear_store(gbuffer_->buffers()[i].format));
   }
   builder.attachment(vk::RenderPassAttachment::d_clear_store(VK_FORMAT_D32_SFLOAT));
+  
+  // Fill gbuffer subpass
   builder.graphics_subpass([buf_count](vk::Subpass& subpass) {
     for (uint32_t i = 0; i < buf_count; ++i) {
       subpass.color_attachment(i, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     }
     subpass.depth_stencil_attachment(buf_count, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+  });
+
+  // Render GUI to albedo pass
+  static_assert(buf_count == 2); // Ordinary buffers. There is also an additional depth
+  builder.graphics_subpass([](vk::Subpass& subpass) {
+    subpass.color_attachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    subpass.preserve_attachment(1); // Normal
+    subpass.depth_stencil_attachment(2, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL); // Depth
   });
 
   VkSubpassDependency dependency {};
@@ -467,10 +479,20 @@ void Renderer::create_render_pass() {
   builder.subpass_dependency(dependency);
 
   dependency.srcSubpass = 0;
+  dependency.dstSubpass = 1;
+  dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+  dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+  dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+  dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+  dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+  builder.subpass_dependency(dependency);
+
+  dependency.srcSubpass = 1;
   dependency.dstSubpass = VK_SUBPASS_EXTERNAL;
   dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
   dependency.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-  dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+  dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
   dependency.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
   dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
@@ -611,8 +633,7 @@ void Renderer::create_pipeline() {
     VK_DYNAMIC_STATE_SCISSOR
   });
 
-  // TODO: subpass 1
-  gui_pipeline_ = gui_pipeline_builder.build(*device_, gui_pipeline_layout_, gbuffer_render_pass_, 0);
+  gui_pipeline_ = gui_pipeline_builder.build(*device_, gui_pipeline_layout_, gbuffer_render_pass_, 1);
 }
 
 void Renderer::create_synchronization_primitives() {
