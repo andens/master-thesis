@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <vector>
 #include "vulkan_include.inl"
 
@@ -39,7 +40,7 @@ private:
   std::vector<VkAttachmentReference> input_attachments_ = {};
   std::vector<VkAttachmentReference> color_attachments_ = {};
   std::vector<VkAttachmentReference> resolve_attachments_ = {};
-  VkAttachmentReference depth_stencil_ = {};
+  std::unique_ptr<VkAttachmentReference> depth_stencil_;
   std::vector<uint32_t> preserve_attachments_ = {};
 };
 

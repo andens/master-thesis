@@ -41,6 +41,8 @@ RenderPassAttachment RenderPassAttachment::d_clear_store(VkFormat format) {
 }
 
 Subpass::Subpass(VkPipelineBindPoint bind_point) {
+  depth_stencil_.reset(new VkAttachmentReference);
+
   description_.flags = 0; // Future use
   // What kind of pipeline this subpass will be used in (graphics/compute)
   description_.pipelineBindPoint = bind_point;
@@ -49,7 +51,7 @@ Subpass::Subpass(VkPipelineBindPoint bind_point) {
   description_.colorAttachmentCount = 0;
   description_.pColorAttachments = nullptr;
   description_.pResolveAttachments = nullptr;
-  description_.pDepthStencilAttachment = nullptr;
+  description_.pDepthStencilAttachment = depth_stencil_.get();
   description_.preserveAttachmentCount = 0;
   description_.pPreserveAttachments = nullptr;
 }
@@ -70,8 +72,7 @@ void Subpass::color_attachment(uint32_t attachment, VkImageLayout layout, uint32
 }
 
 void Subpass::depth_stencil_attachment(uint32_t attachment, VkImageLayout layout) {
-  depth_stencil_ = { attachment, layout };
-  description_.pDepthStencilAttachment = &depth_stencil_;
+  *depth_stencil_ = { attachment, layout };
 }
 
 void Subpass::preserve_attachment(uint32_t attachment) {
