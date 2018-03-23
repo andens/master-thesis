@@ -1134,6 +1134,67 @@ void Renderer::create_imgui_font_texture() {
   begin_info.pInheritanceInfo = nullptr;
   graphics_cmd_buf_->vkBeginCommandBuffer(&begin_info);
 
+  // Copy to device local image
+  {
+    VkImageMemoryBarrier copy_barrier {};
+    copy_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    copy_barrier.pNext = nullptr;
+    copy_barrier.srcAccessMask = 0;
+    copy_barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    copy_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    copy_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    copy_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    copy_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    copy_barrier.image = gui_font_image_;
+    copy_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    copy_barrier.subresourceRange.baseMipLevel = 0;
+    copy_barrier.subresourceRange.levelCount = 1;
+    copy_barrier.subresourceRange.baseArrayLayer = 0;
+    copy_barrier.subresourceRange.layerCount = 1;
+    graphics_cmd_buf_->vkCmdPipelineBarrier(
+      VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+      0,
+      0, nullptr,
+      0, nullptr,
+      1, &copy_barrier
+    );
+
+    VkBufferImageCopy copy_region {};
+    copy_region.bufferOffset = 0;
+    copy_region.bufferRowLength = 0;
+    copy_region.bufferImageHeight = 0;
+    copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    copy_region.imageSubresource.mipLevel = 0;
+    copy_region.imageSubresource.baseArrayLayer = 0;
+    copy_region.imageSubresource.layerCount = 1;
+    copy_region.imageOffset = { 0, 0, 0 };
+    copy_region.imageExtent = { width, height, 1 };
+    graphics_cmd_buf_->vkCmdCopyBufferToImage(upload_buffer, gui_font_image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
+
+    VkImageMemoryBarrier usage_barrier {};
+    usage_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    usage_barrier.pNext = nullptr;
+    usage_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    usage_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    usage_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    usage_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    usage_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    usage_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    usage_barrier.image = gui_font_image_;
+    usage_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    usage_barrier.subresourceRange.baseMipLevel = 0;
+    usage_barrier.subresourceRange.levelCount = 1;
+    usage_barrier.subresourceRange.baseArrayLayer = 0;
+    usage_barrier.subresourceRange.layerCount = 1;
+    graphics_cmd_buf_->vkCmdPipelineBarrier(
+      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+      0,
+      0, nullptr,
+      0, nullptr,
+      1, &usage_barrier
+    );
+  }
+
   graphics_cmd_buf_->vkEndCommandBuffer();
 
   VkCommandBuffer cmd_buf = graphics_cmd_buf_->command_buffer();
@@ -1152,4 +1213,8 @@ void Renderer::create_imgui_font_texture() {
 
   device_->vkDestroyBuffer(upload_buffer, nullptr);
   device_->vkFreeMemory(upload_buffer_memory, nullptr);
+
+  // Save identifier so that it's returned to us by imgui later.
+  // Not really necessary since we only have one font image but still.
+  io.Fonts->TexID = reinterpret_cast<void*>(gui_font_image_);
 }
