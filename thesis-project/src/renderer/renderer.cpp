@@ -1122,7 +1122,7 @@ void Renderer::create_imgui_font_texture() {
     copy_region.imageSubresource.baseArrayLayer = 0;
     copy_region.imageSubresource.layerCount = 1;
     copy_region.imageOffset = { 0, 0, 0 };
-    copy_region.imageExtent = { width, height, 1 };
+    copy_region.imageExtent = { static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1 };
     graphics_cmd_buf_->vkCmdCopyBufferToImage(upload_buffer->vulkan_buffer_handle(), gui_font_image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
 
     VkImageMemoryBarrier usage_barrier {};
