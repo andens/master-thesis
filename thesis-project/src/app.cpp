@@ -170,7 +170,7 @@ void App::frame(float delta_time, float total_time) {
 
   scene_->update(delta_time, *renderer_);
 
-  ImGui::EndFrame();
+  ImGui::Render();
 
   renderer_->use_matrices(camera_->View(), camera_->Proj());
   renderer_->render();

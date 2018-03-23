@@ -211,7 +211,63 @@ void Renderer::render() {
   if (draw_data->TotalVtxCount != 0) {
     update_gui_vertex_data(draw_data);
 
-    // TODO: continue rendering stuff here
+    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, gui_pipeline_);
+
+    {
+      VkDescriptorSet desc_set = gui_descriptor_set_->set().vulkan_handle();
+      graphics_cmd_buf_->vkCmdBindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, gui_pipeline_layout_, 0, 1, &desc_set, 0, nullptr);
+    }
+
+    {
+      VkBuffer vert_buf = gui_vertex_buffer_->vulkan_buffer_handle();
+      VkDeviceSize vertex_offset = 0;
+      graphics_cmd_buf_->vkCmdBindVertexBuffers(0, 1, &vert_buf, &vertex_offset);
+      graphics_cmd_buf_->vkCmdBindIndexBuffer(gui_index_buffer_->vulkan_buffer_handle(), 0, VK_INDEX_TYPE_UINT16);
+    }
+
+    {
+      VkViewport viewport {};
+      viewport.x = 0;
+      viewport.y = 0;
+      viewport.width = ImGui::GetIO().DisplaySize.x;
+      viewport.height = ImGui::GetIO().DisplaySize.y;
+      viewport.minDepth = 0.0f;
+      viewport.maxDepth = 1.0f;
+      graphics_cmd_buf_->vkCmdSetViewport(0, 1, &viewport);
+    }
+
+    // Scale and translation
+    {
+      ImGuiIO& io = ImGui::GetIO();
+      float scale[2] = { 2.0f / io.DisplaySize.x, 2.0f / io.DisplaySize.y };
+      float translate[2] = { -1.0f, -1.0f };
+      graphics_cmd_buf_->vkCmdPushConstants(gui_pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 2, scale);
+      graphics_cmd_buf_->vkCmdPushConstants(gui_pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, sizeof(float) * 2, sizeof(float) * 2, translate);
+    }
+
+    // Render the command lists
+    int vertex_offset = 0;
+    int index_offset = 0;
+    for (int n = 0; n < draw_data->CmdListsCount; ++n) {
+      ImDrawList const* cmd_list = draw_data->CmdLists[n];
+      for (int cmd_num = 0; cmd_num < cmd_list->CmdBuffer.Size; ++cmd_num) {
+        ImDrawCmd const* draw_cmd = &cmd_list->CmdBuffer[cmd_num];
+        if (draw_cmd->UserCallback) {
+          draw_cmd->UserCallback(cmd_list, draw_cmd);
+        }
+        else {
+          VkRect2D scissor {};
+          scissor.offset.x = draw_cmd->ClipRect.x > 0.0f ? static_cast<int32_t>(draw_cmd->ClipRect.x) : 0;
+          scissor.offset.y = draw_cmd->ClipRect.y > 0.0f ? static_cast<int32_t>(draw_cmd->ClipRect.y) : 0;
+          scissor.extent.width = static_cast<uint32_t>(draw_cmd->ClipRect.z - draw_cmd->ClipRect.x);
+          scissor.extent.height = static_cast<uint32_t>(draw_cmd->ClipRect.w - draw_cmd->ClipRect.y + 1);
+          graphics_cmd_buf_->vkCmdSetScissor(0, 1, &scissor);
+          graphics_cmd_buf_->vkCmdDrawIndexed(draw_cmd->ElemCount, 1, index_offset, vertex_offset, 0);
+        }
+        index_offset += draw_cmd->ElemCount;
+      }
+      vertex_offset += cmd_list->VtxBuffer.Size;
+    }
   }
 
   graphics_cmd_buf_->vkCmdEndRenderPass();
