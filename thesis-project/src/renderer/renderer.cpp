@@ -976,6 +976,7 @@ void Renderer::create_imgui_font_texture() {
   unsigned char* texels;
   int width, height;
   io.Fonts->GetTexDataAsRGBA32(&texels, &width, &height);
+  size_t upload_size = width * height * 4 * sizeof(char);
 
   // Create image
   {
@@ -1061,7 +1062,54 @@ void Renderer::create_imgui_font_texture() {
     gui_descriptor_set_->use_font_image(*device_, gui_font_image_view_, gui_font_sampler_);
   }
 
-  // TODO: create upload buffer, upload data, release temporary resources
+  VkBuffer upload_buffer { VK_NULL_HANDLE };
+  VkDeviceMemory upload_buffer_memory { VK_NULL_HANDLE };
+
+  // Create a temporary upload buffer
+  {
+    VkBufferCreateInfo buffer_info {};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.pNext = nullptr;
+    buffer_info.flags = 0;
+    buffer_info.size = upload_size;
+    buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    buffer_info.queueFamilyIndexCount = 0;
+    buffer_info.pQueueFamilyIndices = nullptr;
+    VkResult result = device_->vkCreateBuffer(&buffer_info, nullptr, &upload_buffer);
+    if (result != VK_SUCCESS) {
+      throw std::runtime_error("Could not create staging buffer for font image upload.");
+    }
+
+    VkMemoryRequirements mem_req {};
+    device_->vkGetImageMemoryRequirements(upload_buffer, &mem_req);
+
+    VkMemoryAllocateInfo alloc_info {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.pNext = nullptr;
+    alloc_info.allocationSize = mem_req.size;
+    alloc_info.memoryTypeIndex = 0;
+
+    VkMemoryPropertyFlagBits desired_props = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    auto const& mem_props = device_->physical_device()->memory_properties();
+    for (uint32_t i = 0; i < mem_props.memoryTypeCount; ++i) {
+      // Current memory type (i) suitable and the memory type has desired properties.
+      if ((mem_req.memoryTypeBits & (1 << i)) && ((mem_props.memoryTypes[i].propertyFlags & desired_props) == desired_props)) {
+        alloc_info.memoryTypeIndex = i;
+        break;
+      }
+    }
+
+    result = device_->vkAllocateMemory(&alloc_info, nullptr, &upload_buffer_memory);
+    if (result != VK_SUCCESS) {
+      throw std::runtime_error("Could not allocate memory for font image upload buffer.");
+    }
+
+    result = device_->vkBindBufferMemory(upload_buffer, upload_buffer_memory, 0);
+    if (result != VK_SUCCESS) {
+      throw std::runtime_error("Could not bind font image upload buffer to memory.");
+    }
+  }
 
   VkCommandBufferBeginInfo begin_info {};
   begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1086,5 +1134,6 @@ void Renderer::create_imgui_font_texture() {
   graphics_queue_->vkQueueSubmit(1, &submit_info, VK_NULL_HANDLE);
   device_->vkDeviceWaitIdle();
 
-  // TODO: invalidate font upload objects
+  device_->vkDestroyBuffer(upload_buffer, nullptr);
+  device_->vkFreeMemory(upload_buffer_memory, nullptr);
 }
