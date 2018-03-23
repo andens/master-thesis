@@ -1111,6 +1111,22 @@ void Renderer::create_imgui_font_texture() {
     }
   }
 
+  // Upload font image to buffer
+  {
+    void* mapped_data { nullptr };
+    device_->vkMapMemory(upload_buffer_memory, 0, upload_size, 0, &mapped_data);
+    memcpy(mapped_data, texels, upload_size);
+
+    VkMappedMemoryRange flush_range {};
+    flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+    flush_range.pNext = nullptr;
+    flush_range.memory = upload_buffer_memory;
+    flush_range.offset = 0;
+    flush_range.size = upload_size;
+    device_->vkFlushMappedMemoryRanges(1, &flush_range);
+    device_->vkUnmapMemory(upload_buffer_memory);
+  }
+
   VkCommandBufferBeginInfo begin_info {};
   begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   begin_info.pNext = nullptr;
