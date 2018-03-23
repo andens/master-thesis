@@ -70,6 +70,12 @@ Renderer::~Renderer() {
     device_->vkUnmapMemory(indirect_buffer_->vulkan_memory_handle());
     indirect_buffer_->destroy(*device_);
     vertex_buffer_->destroy(*device_);
+    if (gui_index_buffer_) {
+      gui_index_buffer_->destroy(*device_);
+    }
+    if (gui_vertex_buffer_) {
+      gui_vertex_buffer_->destroy(*device_);
+    }
     device_->vkDestroyImageView(gui_font_image_view_, nullptr);
     device_->vkDestroyImage(gui_font_image_, nullptr);
     device_->vkFreeMemory(gui_font_image_memory_, nullptr);
@@ -201,7 +207,12 @@ void Renderer::render() {
 
   graphics_cmd_buf_->vkCmdNextSubpass(VK_SUBPASS_CONTENTS_INLINE);
 
-  // TODO: ImGui_ImplGlfwVulkan_Render
+  ImDrawData* draw_data = ImGui::GetDrawData();
+  if (draw_data->TotalVtxCount != 0) {
+    update_gui_vertex_data(draw_data);
+
+    // TODO: continue rendering stuff here
+  }
 
   graphics_cmd_buf_->vkCmdEndRenderPass();
 
@@ -1170,4 +1181,58 @@ void Renderer::create_imgui_font_texture() {
   // Save identifier so that it's returned to us by imgui later.
   // Not really necessary since we only have one font image but still.
   io.Fonts->TexID = reinterpret_cast<void*>(gui_font_image_);
+}
+
+void Renderer::update_gui_vertex_data(ImDrawData* draw_data) {
+  // (Re)Create vertex buffer if needed
+  size_t vertex_data_size = draw_data->TotalVtxCount * sizeof(ImDrawVert);
+  if (gui_vertex_buffer_size_ < vertex_data_size) {
+    if (gui_vertex_buffer_) {
+      gui_vertex_buffer_->destroy(*device_);
+    }
+    gui_vertex_buffer_.reset(new vk::Buffer { *device_, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, vertex_data_size });
+    gui_vertex_buffer_size_ = vertex_data_size;
+  }
+
+  // (Re)Create index buffer if needed
+  size_t index_data_size = draw_data->TotalIdxCount * sizeof(ImDrawIdx);
+  if (gui_index_buffer_size_ < index_data_size) {
+    if (gui_index_buffer_) {
+      gui_index_buffer_->destroy(*device_);
+    }
+    gui_index_buffer_.reset(new vk::Buffer { *device_, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, index_data_size });
+    gui_index_buffer_size_ = index_data_size;
+  }
+
+  // Upload data to buffers
+  {
+    ImDrawVert* mapped_vertices { nullptr };
+    ImDrawIdx* mapped_indices { nullptr };
+    device_->vkMapMemory(gui_vertex_buffer_->vulkan_memory_handle(), 0, vertex_data_size, 0, reinterpret_cast<void**>(&mapped_vertices));
+    device_->vkMapMemory(gui_index_buffer_->vulkan_memory_handle(), 0, index_data_size, 0, reinterpret_cast<void**>(&mapped_indices));
+
+    for (int n = 0; n < draw_data->CmdListsCount; ++n) {
+      ImDrawList const* cmd_list = draw_data->CmdLists[n];
+      memcpy(mapped_vertices, cmd_list->VtxBuffer.Data, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
+      memcpy(mapped_indices, cmd_list->IdxBuffer.Data, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
+      mapped_vertices += cmd_list->VtxBuffer.Size;
+      mapped_indices += cmd_list->IdxBuffer.Size;
+    }
+
+    VkMappedMemoryRange flush_ranges[2] = {};
+    flush_ranges[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+    flush_ranges[0].pNext = nullptr;
+    flush_ranges[0].memory = gui_vertex_buffer_->vulkan_memory_handle();
+    flush_ranges[0].offset = 0;
+    flush_ranges[0].size = VK_WHOLE_SIZE;
+    flush_ranges[1].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+    flush_ranges[1].pNext = nullptr;
+    flush_ranges[1].memory = gui_index_buffer_->vulkan_memory_handle();
+    flush_ranges[1].offset = 0;
+    flush_ranges[1].size = VK_WHOLE_SIZE;
+    device_->vkFlushMappedMemoryRanges(2, flush_ranges);
+
+    device_->vkUnmapMemory(gui_vertex_buffer_->vulkan_memory_handle());
+    device_->vkUnmapMemory(gui_index_buffer_->vulkan_memory_handle());
+  }
 }

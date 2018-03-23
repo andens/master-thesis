@@ -7,6 +7,7 @@
 #include <vulkan-helpers/vulkan_include.inl>
 
 class GuiDescriptorSet;
+class ImDrawData;
 class Mesh;
 class RenderCache;
 class RenderJobsDescriptorSet;
@@ -75,6 +76,7 @@ private:
   void update_indirect_buffer();
   void initialize_imgui();
   void create_imgui_font_texture();
+  void update_gui_vertex_data(ImDrawData* draw_data);
 
 private:
   VkExtent2D render_area_ { 0, 0 };
@@ -118,6 +120,10 @@ private:
   VkImageView gui_font_image_view_ { VK_NULL_HANDLE };
 
   std::unique_ptr<vk::Buffer> vertex_buffer_;
+  std::unique_ptr<vk::Buffer> gui_vertex_buffer_;
+  std::unique_ptr<vk::Buffer> gui_index_buffer_;
+  size_t gui_vertex_buffer_size_ { 0 };
+  size_t gui_index_buffer_size_ { 0 };
 
   std::unique_ptr<vk::DescriptorPool> descriptor_pool_;
   std::unique_ptr<RenderJobsDescriptorSet> render_jobs_descriptor_set_;
