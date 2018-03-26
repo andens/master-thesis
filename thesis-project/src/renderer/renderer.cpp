@@ -1374,10 +1374,15 @@ void Renderer::register_objects_in_table() {
 }
 
 void Renderer::create_indirect_commands_layout() {
-  // Generating commands on the device is done by processing a sequence of
-  // tokens. The VkIndirectCommandsLayoutNVX describes this sequence. Actual
-  // data required by tokens are provided by VkBuffers when generating the
-  // commands.
+  // Generating commands on the device is done by processing a bunch of token
+  // sequences. It seems that a sequence is a set of commands to call after
+  // each other, represented by tokens. That is, a draw call always comes
+  // together with a pipeline switch according to the sequence defined here.
+  // One can probably include several draw calls in a sequence if need be, but
+  // it seems that a sequence is the atomic set of commands that will be used,
+  // but with varying input data provided by buffers at generation time. The
+  // VkIndirectCommandsLayoutNVX describes what calls a sequence consists of,
+  // and we generate several invocations of this sequence later.
 
   std::array<VkIndirectCommandsLayoutTokenNVX, 2> tokens {};
 
