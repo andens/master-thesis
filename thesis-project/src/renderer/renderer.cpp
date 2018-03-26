@@ -486,6 +486,7 @@ void Renderer::create_swapchain() {
 void Renderer::create_command_pools_and_buffers() {
   stable_graphics_cmd_pool_ = vk::CommandPool::make_stable(device_->graphics_family(), device_);
   graphics_cmd_buf_ = stable_graphics_cmd_pool_->allocate_primary();
+  //indirect_cmd_buf_ = stable_graphics_cmd_pool_->allocate_secondary();
 
   transient_graphics_cmd_pool_ = vk::CommandPool::make_transient(device_->graphics_family(), device_);
   blit_swapchain_cmd_buf_ = transient_graphics_cmd_pool_->allocate_primary();
@@ -1309,6 +1310,7 @@ void Renderer::create_dgc_resources() {
   create_object_table();
   register_objects_in_table();
   create_indirect_commands_layout();
+  //reserve_space_for_indirect_commands();
 }
 
 void Renderer::create_object_table() {
@@ -1409,3 +1411,42 @@ void Renderer::create_indirect_commands_layout() {
     throw std::runtime_error("Could not create indirect commands layout.");
   }
 }
+
+/*
+void Renderer::reserve_space_for_indirect_commands() {
+  VkCommandBufferInheritanceInfo inheritance_info {};
+  inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+  inheritance_info.pNext = nullptr;
+  inheritance_info. // Do stuff here
+
+  VkCommandBufferBeginInfo cmd_buf_info {};
+  cmd_buf_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  cmd_buf_info.pNext = nullptr;
+  // Continue: Render passes (and subpasses) can't start in a secondary command
+  // buffer, so the flag means that the command buffer continues using whatever
+  // render pass is inherited from the primary command buffer. The reason we
+  // don't always use it is because we can do non-render pass stuff in here as
+  // well.
+  // https://www.khronos.org/assets/uploads/developers/library/2016-vulkan-devday-uk/6-Vulkan-subpasses.pdf
+  cmd_buf_info.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+  cmd_buf_info.pInheritanceInfo = &inheritance_info;
+
+  indirect_cmd_buf_->vkBeginCommandBuffer(&cmd_buf_info);
+
+  VkCmdReserveSpaceForCommandsInfoNVX reserve_info {};
+  reserve_info.sType = VK_STRUCTURE_TYPE_CMD_RESERVE_SPACE_FOR_COMMANDS_INFO_NVX;
+  reserve_info.pNext = nullptr;
+  reserve_info.objectTable = object_table_;
+  reserve_info.indirectCommandsLayout = indirect_commands_layout_;
+  // If we want to save generated draw calls into a secondary command buffer we
+  // need to allocate memory up-front. This call is done on the CPU, but memory
+  // does indeed live on the GPU according to Christoph Kubisch. The number of
+  // sequences is an upper limit on how many times the indirect commands layout
+  // will be stamped out, I belive.
+  reserve_info.maxSequencesCount = 1;
+
+  indirect_cmd_buf_->vkCmdReserveSpaceForCommandsNVX(&reserve_info);
+
+  indirect_cmd_buf_->vkEndCommandBuffer();
+}
+*/

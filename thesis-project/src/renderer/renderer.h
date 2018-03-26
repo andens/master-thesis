@@ -81,6 +81,7 @@ private:
   void create_object_table();
   void register_objects_in_table();
   void create_indirect_commands_layout();
+  //void reserve_space_for_indirect_commands();
 
 private:
   VkExtent2D render_area_ { 0, 0 };
@@ -96,6 +97,7 @@ private:
   std::shared_ptr<vk::CommandPool> stable_graphics_cmd_pool_;
   std::shared_ptr<vk::CommandPool> transient_graphics_cmd_pool_;
   std::shared_ptr<vk::CommandBuffer> graphics_cmd_buf_;
+  //std::shared_ptr<vk::CommandBuffer> indirect_cmd_buf_;
   std::shared_ptr<vk::CommandBuffer> blit_swapchain_cmd_buf_;
   std::unique_ptr<graphics::DepthBuffer> depth_buffer_;
   std::unique_ptr<graphics::deferred_shading::GBuffer> gbuffer_;
