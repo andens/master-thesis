@@ -199,8 +199,46 @@ void Renderer::render() {
   graphics_cmd_buf_->vkCmdBindVertexBuffers(0, 1, &vertex_buf, &offset);
   if (render_indirectly_) {
     update_indirect_buffer();
-    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, current_alpha_draw_calls_, sizeof(VkDrawIndirectCommand));
-    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), max_draw_calls_ - current_beta_draw_calls_, current_beta_draw_calls_, sizeof(VkDrawIndirectCommand));
+    // TODO: Set up the scene beforehand so that I don't have to care about
+    // structural changes here. For ease of implementation, MDI will
+    // not bother with the pipeline and always use the same. In real life, one
+    // would have to organize the draw calls by pipeline. I still want to
+    // accept changes here to result in incremental changes. Dirtify is one
+    // change, but I also want to change pipelines for when I switch between
+    // DGC with one material and DGC with two.
+    //graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, current_alpha_draw_calls_, sizeof(VkDrawIndirectCommand));
+    //graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), max_draw_calls_ - current_beta_draw_calls_, current_beta_draw_calls_, sizeof(VkDrawIndirectCommand));
+
+    // References to the input data for each token command.
+    std::array<VkIndirectCommandsTokenNVX, 2> input_tokens {};
+    input_tokens[0].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_PIPELINE_NVX;
+    input_tokens[0].buffer = dgc_pipeline_parameters_->vulkan_buffer_handle();
+    input_tokens[0].offset = 0;
+    input_tokens[1].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_DRAW_NVX;
+    input_tokens[1].buffer = indirect_buffer_->vulkan_buffer_handle(); // Same as MDI
+    input_tokens[1].offset = 0;
+
+    VkCmdProcessCommandsInfoNVX commands_info {};
+    commands_info.sType = VK_STRUCTURE_TYPE_CMD_PROCESS_COMMANDS_INFO_NVX;
+    commands_info.pNext = nullptr;
+    commands_info.objectTable = object_table_;
+    commands_info.indirectCommandsLayout = indirect_commands_layout_;
+    commands_info.indirectCommandsTokenCount = static_cast<uint32_t>(input_tokens.size());
+    commands_info.pIndirectCommandsTokens = input_tokens.data();
+    commands_info.maxSequencesCount = current_total_draw_calls_;
+    commands_info.targetCommandBuffer = NULL; // Don't record into secondary buffer; implicitly reserve and execute in the processing command buffer instead
+    commands_info.sequencesCountBuffer = VK_NULL_HANDLE; // Don't source count from a buffer, I provide actual count in |maxSequencesCount|
+    commands_info.sequencesCountOffset = 0; // Not used (no sequencesCountBuffer)
+    commands_info.sequencesIndexBuffer = VK_NULL_HANDLE; // No custom sequence indices; rely on default 1, 2, ....
+    commands_info.sequencesIndexOffset = 0; // Not used (no sequencesIndexBuffer)
+    std::cout << "Rendering with " << current_total_draw_calls_ << " sequences." << std::endl;
+    // Why would not a command with maxSequencesCount == 0 work? If I do that,
+    // the geometry is rendered anyways. The command buffer probably is reset
+    // because the object properly vanishes if I don't call the method, but it
+    // really should work even when I tell it to generate no sequence at all.
+    if (current_total_draw_calls_ > 0) {
+      graphics_cmd_buf_->vkCmdProcessCommandsNVX(&commands_info);
+    }
   }
   else {
     render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
