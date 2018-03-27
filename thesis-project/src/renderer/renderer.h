@@ -152,6 +152,7 @@ private:
 
   VkObjectTableNVX object_table_ { VK_NULL_HANDLE };
   VkIndirectCommandsLayoutNVX indirect_commands_layout_ { VK_NULL_HANDLE };
+  std::unique_ptr<vk::Buffer> dgc_pipeline_parameters_;
 
   DirectX::XMFLOAT4X4 view_ {};
   DirectX::XMFLOAT4X4 proj_ {};

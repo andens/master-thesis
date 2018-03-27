@@ -68,6 +68,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    dgc_pipeline_parameters_->destroy(*device_);
     device_->vkDestroyIndirectCommandsLayoutNVX(indirect_commands_layout_, nullptr);
     device_->vkDestroyObjectTableNVX(object_table_, nullptr);
     device_->vkUnmapMemory(indirect_buffer_->vulkan_memory_handle());
@@ -1311,6 +1312,22 @@ void Renderer::create_dgc_resources() {
   register_objects_in_table();
   create_indirect_commands_layout();
   //reserve_space_for_indirect_commands();
+
+  dgc_pipeline_parameters_.reset(new vk::Buffer { *device_, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, max_draw_calls_ * sizeof(uint32_t) });
+
+  // Initialize pipeline references to 0 (which means all would use the same
+  // pipeline that was registered to index 0 by me).
+  void* mapped_data { nullptr };
+  device_->vkMapMemory(dgc_pipeline_parameters_->vulkan_memory_handle(), 0, max_draw_calls_ * sizeof(uint32_t), 0, &mapped_data);
+  memset(mapped_data, 0, max_draw_calls_ * sizeof(uint32_t));
+  VkMappedMemoryRange flush_range {};
+  flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+  flush_range.pNext = nullptr;
+  flush_range.memory = dgc_pipeline_parameters_->vulkan_memory_handle();
+  flush_range.offset = 0;
+  flush_range.size = max_draw_calls_ * sizeof(uint32_t);
+  device_->vkFlushMappedMemoryRanges(1, &flush_range);
+  device_->vkUnmapMemory(dgc_pipeline_parameters_->vulkan_memory_handle());
 }
 
 void Renderer::create_object_table() {
@@ -1402,7 +1419,7 @@ void Renderer::create_indirect_commands_layout() {
   layout_info.sType = VK_STRUCTURE_TYPE_INDIRECT_COMMANDS_LAYOUT_CREATE_INFO_NVX;
   layout_info.pNext = nullptr;
   layout_info.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-  layout_info.flags = VK_INDIRECT_COMMANDS_LAYOUT_USAGE_UNORDERED_SEQUENCES_BIT_NVX;
+  layout_info.flags = 0; // VK_INDIRECT_COMMANDS_LAYOUT_USAGE_UNORDERED_SEQUENCES_BIT_NVX
   layout_info.tokenCount = static_cast<uint32_t>(tokens.size());
   layout_info.pTokens = tokens.data();
 
