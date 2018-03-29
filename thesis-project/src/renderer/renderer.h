@@ -45,6 +45,12 @@ public:
   void use_matrices(DirectX::CXMMATRIX view, DirectX::CXMMATRIX proj);
   void borrow_render_cache(std::function<void(RenderCache& cache)> const& provide);
   void update_transform(uint32_t render_job, DirectX::CXMMATRIX transform);
+  void should_render_ui(bool should);
+  // Returns the measured time from starting rendering (including recording
+  // commands normally or incrementally) until it's finished, stopping before
+  // blitting to swapchain and presenting. For fair measurements, the GUI
+  // should also be disabled.
+  double measured_time() const;
 
 private:
   struct Vertex {
@@ -162,4 +168,7 @@ private:
 
   DirectX::XMFLOAT4X4 view_ {};
   DirectX::XMFLOAT4X4 proj_ {};
+
+  bool render_ui_ { true };
+  double measured_time_ { 0.0 };
 };
