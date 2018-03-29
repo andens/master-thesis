@@ -153,6 +153,12 @@ private:
   VkObjectTableNVX object_table_ { VK_NULL_HANDLE };
   VkIndirectCommandsLayoutNVX indirect_commands_layout_ { VK_NULL_HANDLE };
   std::unique_ptr<vk::Buffer> dgc_pipeline_parameters_;
+  std::unique_ptr<vk::Buffer> dgc_push_constants_;
+  struct Push {
+    uint32_t table_entry;
+    uint32_t actual_data;
+  };
+  Push* mapped_dgc_push_constants_ { nullptr };
 
   DirectX::XMFLOAT4X4 view_ {};
   DirectX::XMFLOAT4X4 proj_ {};

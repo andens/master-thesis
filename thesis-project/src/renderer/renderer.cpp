@@ -68,6 +68,8 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    device_->vkUnmapMemory(dgc_push_constants_->vulkan_memory_handle());
+    dgc_push_constants_->destroy(*device_);
     dgc_pipeline_parameters_->destroy(*device_);
     device_->vkDestroyIndirectCommandsLayoutNVX(indirect_commands_layout_, nullptr);
     device_->vkDestroyObjectTableNVX(object_table_, nullptr);
@@ -210,13 +212,16 @@ void Renderer::render() {
     //graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), max_draw_calls_ - current_beta_draw_calls_, current_beta_draw_calls_, sizeof(VkDrawIndirectCommand));
 
     // References to the input data for each token command.
-    std::array<VkIndirectCommandsTokenNVX, 2> input_tokens {};
+    std::array<VkIndirectCommandsTokenNVX, 3> input_tokens {};
     input_tokens[0].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_PIPELINE_NVX;
     input_tokens[0].buffer = dgc_pipeline_parameters_->vulkan_buffer_handle();
     input_tokens[0].offset = 0;
-    input_tokens[1].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_DRAW_NVX;
-    input_tokens[1].buffer = indirect_buffer_->vulkan_buffer_handle(); // Same as MDI
+    input_tokens[1].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_CONSTANT_NVX;
+    input_tokens[1].buffer = dgc_push_constants_->vulkan_buffer_handle();
     input_tokens[1].offset = 0;
+    input_tokens[2].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_DRAW_NVX;
+    input_tokens[2].buffer = indirect_buffer_->vulkan_buffer_handle(); // Same as MDI
+    input_tokens[2].offset = 0;
 
     VkCmdProcessCommandsInfoNVX commands_info {};
     commands_info.sType = VK_STRUCTURE_TYPE_CMD_PROCESS_COMMANDS_INFO_NVX;
@@ -231,7 +236,6 @@ void Renderer::render() {
     commands_info.sequencesCountOffset = 0; // Not used (no sequencesCountBuffer)
     commands_info.sequencesIndexBuffer = VK_NULL_HANDLE; // No custom sequence indices; rely on default 1, 2, ....
     commands_info.sequencesIndexOffset = 0; // Not used (no sequencesIndexBuffer)
-    std::cout << "Rendering with " << current_total_draw_calls_ << " sequences." << std::endl;
     // Why would not a command with maxSequencesCount == 0 work? If I do that,
     // the geometry is rendered anyways. The command buffer probably is reset
     // because the object properly vanishes if I don't call the method, but it
@@ -1011,13 +1015,22 @@ void Renderer::update_indirect_buffer() {
       indirect_command->firstVertex = job_context.object_type == RenderObject::Box ? 0 : 36;
       indirect_command->firstInstance = job_context.job;
 
-      VkMappedMemoryRange flush_range {};
-      flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-      flush_range.pNext = nullptr;
-      flush_range.memory = indirect_buffer_->vulkan_memory_handle();
-      flush_range.offset = indirect_buffer_element * sizeof(VkDrawIndirectCommand);
-      flush_range.size = sizeof(VkDrawIndirectCommand);
-      device_->vkFlushMappedMemoryRanges(1, &flush_range);
+      Push* push = mapped_dgc_push_constants_ + indirect_buffer_element;
+      push->table_entry = 0;
+      push->actual_data = job_context.job;
+
+      std::array<VkMappedMemoryRange, 2> flush_ranges {};
+      flush_ranges[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+      flush_ranges[0].pNext = nullptr;
+      flush_ranges[0].memory = indirect_buffer_->vulkan_memory_handle();
+      flush_ranges[0].offset = indirect_buffer_element * sizeof(VkDrawIndirectCommand);
+      flush_ranges[0].size = sizeof(VkDrawIndirectCommand);
+      flush_ranges[1].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+      flush_ranges[1].pNext = nullptr;
+      flush_ranges[1].memory = dgc_push_constants_->vulkan_memory_handle();
+      flush_ranges[1].offset = indirect_buffer_element * sizeof(Push);
+      flush_ranges[1].size = sizeof(Push);
+      device_->vkFlushMappedMemoryRanges(static_cast<uint32_t>(flush_ranges.size()), flush_ranges.data());
     }
     else {
       assert(change == RenderCache::Change::Remove);
@@ -1039,13 +1052,22 @@ void Renderer::update_indirect_buffer() {
       if (removed_command != last_command) {
         *removed_command = *last_command;
 
-        VkMappedMemoryRange flush_range {};
-        flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-        flush_range.pNext = nullptr;
-        flush_range.memory = indirect_buffer_->vulkan_memory_handle();
-        flush_range.offset = indirect_buffer_element * sizeof(VkDrawIndirectCommand);
-        flush_range.size = sizeof(VkDrawIndirectCommand);
-        device_->vkFlushMappedMemoryRanges(1, &flush_range);
+        Push* removed_push = mapped_dgc_push_constants_ + indirect_buffer_element;
+        Push* last_push = mapped_dgc_push_constants_ + (last_command - mapped_indirect_buffer_); // I'm lazy, get same offset
+        *removed_push = *last_push;
+
+        std::array<VkMappedMemoryRange, 2> flush_ranges {};
+        flush_ranges[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        flush_ranges[0].pNext = nullptr;
+        flush_ranges[0].memory = indirect_buffer_->vulkan_memory_handle();
+        flush_ranges[0].offset = indirect_buffer_element * sizeof(VkDrawIndirectCommand);
+        flush_ranges[0].size = sizeof(VkDrawIndirectCommand);
+        flush_ranges[1].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        flush_ranges[1].pNext = nullptr;
+        flush_ranges[1].memory = dgc_push_constants_->vulkan_memory_handle();
+        flush_ranges[1].offset = indirect_buffer_element * sizeof(Push);
+        flush_ranges[1].size = sizeof(Push);
+        device_->vkFlushMappedMemoryRanges(static_cast<uint32_t>(flush_ranges.size()), flush_ranges.data());
       }
     }
 
@@ -1367,6 +1389,11 @@ void Renderer::create_dgc_resources() {
   flush_range.size = max_draw_calls_ * sizeof(uint32_t);
   device_->vkFlushMappedMemoryRanges(1, &flush_range);
   device_->vkUnmapMemory(dgc_pipeline_parameters_->vulkan_memory_handle());
+
+  // Size: one u32 for indexing the push constant entry in table, another one
+  // for the actual push constant data (offset and size is set in the token).
+  dgc_push_constants_.reset(new vk::Buffer { *device_, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, max_draw_calls_ * sizeof(Push) });
+  device_->vkMapMemory(dgc_push_constants_->vulkan_memory_handle(), 0, max_draw_calls_ * sizeof(Push), 0, reinterpret_cast<void**>(&mapped_dgc_push_constants_));
 }
 
 void Renderer::create_object_table() {
@@ -1374,15 +1401,18 @@ void Renderer::create_object_table() {
   // This is used because we can't use the CPU side pointers directly on the
   // device. Detailed resource bindings are registered later with
   // vkRegisterObjectsNVX.
-  std::array<VkObjectEntryTypeNVX, 1> entry_types {
+  std::array<VkObjectEntryTypeNVX, 2> entry_types {
     VK_OBJECT_ENTRY_TYPE_PIPELINE_NVX,
+    VK_OBJECT_ENTRY_TYPE_PUSH_CONSTANT_NVX,
   };
 
-  std::array<uint32_t, 1> entry_counts {
+  std::array<uint32_t, 2> entry_counts {
+    1,
     1,
   };
 
-  std::array<VkObjectEntryUsageFlagsNVX, 1> entry_usage_flags {
+  std::array<VkObjectEntryUsageFlagsNVX, 2> entry_usage_flags {
+    VK_OBJECT_ENTRY_USAGE_GRAPHICS_BIT_NVX,
     VK_OBJECT_ENTRY_USAGE_GRAPHICS_BIT_NVX,
   };
 
@@ -1415,11 +1445,19 @@ void Renderer::register_objects_in_table() {
   pipeline_entry.flags = VK_OBJECT_ENTRY_USAGE_GRAPHICS_BIT_NVX;
   pipeline_entry.pipeline = gbuffer_pipeline_indirect_;
 
-  std::array<VkObjectTableEntryNVX const*, 1> table_entries {
+  VkObjectTablePushConstantEntryNVX push_constant_entry {};
+  push_constant_entry.type = VK_OBJECT_ENTRY_TYPE_PUSH_CONSTANT_NVX;
+  push_constant_entry.flags = VK_OBJECT_ENTRY_USAGE_GRAPHICS_BIT_NVX;
+  push_constant_entry.pipelineLayout = gbuffer_pipeline_layout_;
+  push_constant_entry.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+  std::array<VkObjectTableEntryNVX const*, 2> table_entries {
     reinterpret_cast<VkObjectTableEntryNVX*>(&pipeline_entry),
+    reinterpret_cast<VkObjectTableEntryNVX*>(&push_constant_entry),
   };
 
-  std::array<uint32_t, 1> object_indices {
+  std::array<uint32_t, 2> object_indices {
+    0,
     0,
   };
 
@@ -1442,17 +1480,22 @@ void Renderer::create_indirect_commands_layout() {
   // VkIndirectCommandsLayoutNVX describes what calls a sequence consists of,
   // and we generate several invocations of this sequence later.
 
-  std::array<VkIndirectCommandsLayoutTokenNVX, 2> tokens {};
+  std::array<VkIndirectCommandsLayoutTokenNVX, 3> tokens {};
 
   tokens[0].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_PIPELINE_NVX;
   tokens[0].bindingUnit = 0; // Not used for pipelines
   tokens[0].dynamicCount = 0; // Not used for pipelines
   tokens[0].divisor = 1;
 
-  tokens[1].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_DRAW_NVX;
-  tokens[1].bindingUnit = 0; // Not used for draw
-  tokens[1].dynamicCount = 0; // Not used for draw
+  tokens[1].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_CONSTANT_NVX;
+  tokens[1].bindingUnit = sizeof(DirectX::XMFLOAT4X4) * 2; // For push constants, this is the |offset| parameter
+  tokens[1].dynamicCount = sizeof(uint32_t); // For push constants, this is the |size| parameter
   tokens[1].divisor = 1;
+
+  tokens[2].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_DRAW_NVX;
+  tokens[2].bindingUnit = 0; // Not used for draw
+  tokens[2].dynamicCount = 0; // Not used for draw
+  tokens[2].divisor = 1;
 
   VkIndirectCommandsLayoutCreateInfoNVX layout_info {};
   layout_info.sType = VK_STRUCTURE_TYPE_INDIRECT_COMMANDS_LAYOUT_CREATE_INFO_NVX;
