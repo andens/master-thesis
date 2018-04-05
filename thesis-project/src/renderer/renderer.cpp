@@ -92,8 +92,10 @@ Renderer::~Renderer() {
     device_->vkDestroySemaphore(gbuffer_generation_complete_, nullptr);
     device_->vkDestroySemaphore(blit_swapchain_complete_, nullptr);
     device_->vkDestroySemaphore(image_available_semaphore_, nullptr);
-    device_->vkDestroyPipeline(gbuffer_pipeline_direct_, nullptr);
-    device_->vkDestroyPipeline(gbuffer_pipeline_indirect_, nullptr);
+    device_->vkDestroyPipeline(pipeline_regular_mdi_wireframe_, nullptr);
+    device_->vkDestroyPipeline(pipeline_regular_mdi_solid_, nullptr);
+    device_->vkDestroyPipeline(pipeline_dgc_wireframe_, nullptr);
+    device_->vkDestroyPipeline(pipeline_dgc_solid_, nullptr);
     device_->vkDestroyPipeline(gui_pipeline_, nullptr);
     device_->vkDestroyPipelineLayout(gbuffer_pipeline_layout_, nullptr);
     device_->vkDestroyPipelineLayout(gui_pipeline_layout_, nullptr);
@@ -160,17 +162,6 @@ void Renderer::render() {
 
   graphics_cmd_buf_->vkCmdBeginRenderPass(&render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
 
-  // TODO: These two pipelines are not necessary. Change into the alpha and beta
-  // ones (perhaps where one uses wireframe and the other solid). Direct rendering
-  // would then want to enumerate with a filter and indirect uses one indirect
-  // draw per pipeline, using count and offset accordingly.
-  if (render_indirectly_) {
-    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer_pipeline_indirect_);
-  }
-  else {
-    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer_pipeline_direct_);
-  }
-
   VkViewport viewport {};
   viewport.x = 0.0f;
   viewport.y = 0.0f;
@@ -202,7 +193,28 @@ void Renderer::render() {
   VkBuffer vertex_buf = vertex_buffer_->vulkan_buffer_handle();
   VkDeviceSize offset = 0;
   graphics_cmd_buf_->vkCmdBindVertexBuffers(0, 1, &vertex_buf, &offset);
-  if (render_indirectly_) {
+
+  switch (render_strategy_) {
+  case RenderStrategy::Regular: {
+    // Alpha
+    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_regular_mdi_solid_);
+    render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
+      if (job_context.pipeline == RenderCache::Pipeline::Alpha) {
+        graphics_cmd_buf_->vkCmdDraw(job_context.object_type == RenderObject::Box ? 36 : 2160, 1, job_context.object_type == RenderObject::Box ? 0 : 36, job_context.job);
+      }
+      return job_context.user_data;
+    });
+    // Beta
+    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_regular_mdi_wireframe_);
+    render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
+      if (job_context.pipeline == RenderCache::Pipeline::Beta) {
+        graphics_cmd_buf_->vkCmdDraw(job_context.object_type == RenderObject::Box ? 36 : 2160, 1, job_context.object_type == RenderObject::Box ? 0 : 36, job_context.job);
+      }
+      return job_context.user_data;
+    });
+    break;
+  }
+  case RenderStrategy::MDI: {
     update_indirect_buffer();
     // TODO: Set up the scene beforehand so that I don't have to care about
     // structural changes here. For ease of implementation, MDI will
@@ -211,8 +223,14 @@ void Renderer::render() {
     // accept changes here to result in incremental changes. Dirtify is one
     // change, but I also want to change pipelines for when I switch between
     // DGC with one material and DGC with two.
-    //graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, current_alpha_draw_calls_, sizeof(VkDrawIndirectCommand));
-    //graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), max_draw_calls_ - current_beta_draw_calls_, current_beta_draw_calls_, sizeof(VkDrawIndirectCommand));
+    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_regular_mdi_solid_);
+    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, current_alpha_draw_calls_, sizeof(VkDrawIndirectCommand));
+    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_regular_mdi_wireframe_);
+    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), max_draw_calls_ - current_beta_draw_calls_, current_beta_draw_calls_, sizeof(VkDrawIndirectCommand));
+    break;
+  }
+  case RenderStrategy::DGC: {
+    update_indirect_buffer();
 
     // References to the input data for each token command.
     std::array<VkIndirectCommandsTokenNVX, 3> input_tokens {};
@@ -246,17 +264,15 @@ void Renderer::render() {
     if (current_total_draw_calls_ > 0) {
       graphics_cmd_buf_->vkCmdProcessCommandsNVX(&commands_info);
     }
+
+    break;
   }
-  else {
-    render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
-      graphics_cmd_buf_->vkCmdDraw(job_context.object_type == RenderObject::Box ? 36 : 2160, 1, job_context.object_type == RenderObject::Box ? 0 : 36, job_context.job);
-      return job_context.user_data;
-    });
+  default: throw;
   }
 
   graphics_cmd_buf_->vkCmdNextSubpass(VK_SUBPASS_CONTENTS_INLINE);
 
-  if (render_ui_) {
+  if (!measure_session_active_) {
     ImDrawData* draw_data = ImGui::GetDrawData();
     if (draw_data->TotalVtxCount != 0) {
       update_gui_vertex_data(draw_data);
@@ -477,6 +493,7 @@ void Renderer::use_matrices(DirectX::CXMMATRIX view, DirectX::CXMMATRIX proj) {
 void Renderer::create_instance() {
   vk::InstanceBuilder builder;
 
+  // TODO: Disabled because it crashes vkRegisterObjectsNVX
   //builder.use_layer("VK_LAYER_LUNARG_standard_validation");
 
   builder.use_extension("VK_EXT_debug_report");
@@ -500,8 +517,9 @@ void Renderer::update_transform(uint32_t render_job, DirectX::CXMMATRIX transfor
   });
 }
 
+// TODO: Replace with a method to begin/end measure sessions
 void Renderer::should_render_ui(bool should) {
-  render_ui_ = should;
+  //render_ui_ = should;
 }
 
 double Renderer::measured_time() const {
@@ -701,46 +719,56 @@ void Renderer::create_shaders() {
 
 void Renderer::create_pipeline() {
   vk::PipelineLayoutBuilder layout_builder;
-  layout_builder.push_constant(VK_SHADER_STAGE_VERTEX_BIT, 0, 2 * sizeof(DirectX::XMFLOAT4X4));
+  layout_builder.push_constant(VK_SHADER_STAGE_VERTEX_BIT, 0, 2 * sizeof(DirectX::XMFLOAT4X4) + sizeof(uint32_t));
   layout_builder.descriptor_layout(render_jobs_descriptor_set_->layout().vulkan_handle());
   gbuffer_pipeline_layout_ = layout_builder.build(*device_);
 
-  vk::PipelineBuilder pipeline_builder;
+  // Mesh rendering pipelines (4 total: 2x (wireframe/solid) regular/mdi + 2x (wireframe/solid) dgc)
+  {
+    vk::PipelineBuilder pipeline_builder;
 
-  pipeline_builder.shader_stage(VK_SHADER_STAGE_VERTEX_BIT, fill_gbuffer_vs_);
+    pipeline_builder.shader_stage(VK_SHADER_STAGE_VERTEX_BIT, fill_gbuffer_vs_);
 
-  struct SpecializationData {
-    uint32_t indirect_rendering;
-  } spec_data;
-  spec_data.indirect_rendering = 0;
-  pipeline_builder.shader_specialization_data(&spec_data, sizeof(spec_data));
-  pipeline_builder.shader_specialization_map(0, 0, sizeof(SpecializationData::indirect_rendering));
+    struct SpecializationData {
+      uint32_t using_dgc;
+    } spec_data;
+    spec_data.using_dgc = 0;
+    pipeline_builder.shader_specialization_data(&spec_data, sizeof(spec_data));
+    pipeline_builder.shader_specialization_map(0, 0, sizeof(SpecializationData::using_dgc));
 
-  pipeline_builder.shader_stage(VK_SHADER_STAGE_FRAGMENT_BIT, fill_gbuffer_fs_);
+    pipeline_builder.shader_stage(VK_SHADER_STAGE_FRAGMENT_BIT, fill_gbuffer_fs_);
 
-  pipeline_builder.vertex_layout([](auto& layout) {
-    layout.stream(0, 12 + 8 + 12, VK_VERTEX_INPUT_RATE_VERTEX); // pos + tex + normal
-    layout.attribute(0, VK_FORMAT_R32G32B32_SFLOAT, 0);
-    layout.attribute(1, VK_FORMAT_R32G32_SFLOAT, 12);
-    layout.attribute(2, VK_FORMAT_R32G32B32_SFLOAT, 20);
-  });
+    pipeline_builder.vertex_layout([](auto& layout) {
+      layout.stream(0, 12 + 8 + 12, VK_VERTEX_INPUT_RATE_VERTEX); // pos + tex + normal
+      layout.attribute(0, VK_FORMAT_R32G32B32_SFLOAT, 0);
+      layout.attribute(1, VK_FORMAT_R32G32_SFLOAT, 12);
+      layout.attribute(2, VK_FORMAT_R32G32B32_SFLOAT, 20);
+    });
 
-  pipeline_builder.ia_triangle_list();
-  pipeline_builder.vp_dynamic();
-  pipeline_builder.rs_fill_cull_back();
-  pipeline_builder.ms_none();
-  pipeline_builder.ds_enabled();
-  pipeline_builder.bs_none(2);
-  pipeline_builder.dynamic_state({
-    VK_DYNAMIC_STATE_VIEWPORT,
-    VK_DYNAMIC_STATE_SCISSOR
-  });
+    pipeline_builder.ia_triangle_list();
+    pipeline_builder.vp_dynamic();
+    pipeline_builder.rs_fill_cull_back();
+    pipeline_builder.ms_none();
+    pipeline_builder.ds_enabled();
+    pipeline_builder.bs_none(2);
+    pipeline_builder.dynamic_state({
+      VK_DYNAMIC_STATE_VIEWPORT,
+      VK_DYNAMIC_STATE_SCISSOR
+      });
 
-  gbuffer_pipeline_direct_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
+    pipeline_regular_mdi_solid_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
 
-  spec_data.indirect_rendering = 1;
+    spec_data.using_dgc = 1;
+    pipeline_dgc_solid_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
 
-  gbuffer_pipeline_indirect_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
+    pipeline_builder.rs_wireframe_cull_back();
+
+    spec_data.using_dgc = 0;
+    pipeline_regular_mdi_wireframe_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
+
+    spec_data.using_dgc = 1;
+    pipeline_dgc_wireframe_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
+  }
 
   vk::PipelineLayoutBuilder gui_layout_builder;
   gui_layout_builder.push_constant(VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 4); // GUI scaling and translation
@@ -1425,7 +1453,7 @@ void Renderer::create_object_table() {
   };
 
   std::array<uint32_t, 2> entry_counts {
-    1,
+    2,
     1,
   };
 
@@ -1458,10 +1486,15 @@ void Renderer::create_object_table() {
 void Renderer::register_objects_in_table() {
   // Note: resource bindings can be registered at arbitrary indices within a
   // table.
-  VkObjectTablePipelineEntryNVX pipeline_entry {};
-  pipeline_entry.type = VK_OBJECT_ENTRY_TYPE_PIPELINE_NVX;
-  pipeline_entry.flags = VK_OBJECT_ENTRY_USAGE_GRAPHICS_BIT_NVX;
-  pipeline_entry.pipeline = gbuffer_pipeline_indirect_;
+  VkObjectTablePipelineEntryNVX alpha_pipeline_entry {};
+  alpha_pipeline_entry.type = VK_OBJECT_ENTRY_TYPE_PIPELINE_NVX;
+  alpha_pipeline_entry.flags = VK_OBJECT_ENTRY_USAGE_GRAPHICS_BIT_NVX;
+  alpha_pipeline_entry.pipeline = pipeline_dgc_solid_;
+
+  VkObjectTablePipelineEntryNVX beta_pipeline_entry {};
+  beta_pipeline_entry.type = VK_OBJECT_ENTRY_TYPE_PIPELINE_NVX;
+  beta_pipeline_entry.flags = VK_OBJECT_ENTRY_USAGE_GRAPHICS_BIT_NVX;
+  beta_pipeline_entry.pipeline = pipeline_dgc_wireframe_;
 
   VkObjectTablePushConstantEntryNVX push_constant_entry {};
   push_constant_entry.type = VK_OBJECT_ENTRY_TYPE_PUSH_CONSTANT_NVX;
@@ -1469,13 +1502,15 @@ void Renderer::register_objects_in_table() {
   push_constant_entry.pipelineLayout = gbuffer_pipeline_layout_;
   push_constant_entry.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-  std::array<VkObjectTableEntryNVX const*, 2> table_entries {
-    reinterpret_cast<VkObjectTableEntryNVX*>(&pipeline_entry),
+  std::array<VkObjectTableEntryNVX const*, 3> table_entries {
+    reinterpret_cast<VkObjectTableEntryNVX*>(&alpha_pipeline_entry),
+    reinterpret_cast<VkObjectTableEntryNVX*>(&beta_pipeline_entry),
     reinterpret_cast<VkObjectTableEntryNVX*>(&push_constant_entry),
   };
 
-  std::array<uint32_t, 2> object_indices {
+  std::array<uint32_t, 3> object_indices {
     0,
+    1,
     0,
   };
 
