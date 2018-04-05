@@ -91,6 +91,7 @@ unique_ptr<Device> DeviceBuilder::build(Instance* instance) {
   features.textureCompressionBC = VK_TRUE;
   features.geometryShader = VK_TRUE;
   features.multiDrawIndirect = VK_TRUE;
+  features.fillModeNonSolid = VK_TRUE;
 
   VkDeviceCreateInfo device_info = {};
   device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

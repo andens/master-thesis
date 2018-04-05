@@ -38,6 +38,13 @@ class Swapchain;
 
 class Renderer {
 public:
+  enum class RenderStrategy {
+    Regular,
+    MDI,
+    DGC,
+  };
+
+public:
   Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height);
   ~Renderer();
 
@@ -110,14 +117,19 @@ private:
   VkRenderPass gbuffer_render_pass_ { VK_NULL_HANDLE };
   VkFramebuffer framebuffer_ { VK_NULL_HANDLE };
   VkShaderModule fullscreen_triangle_vs_ { VK_NULL_HANDLE };
-  VkShaderModule fill_gbuffer_vs_ { VK_NULL_HANDLE };
+  VkShaderModule visualize_vs_ { VK_NULL_HANDLE };
+  VkShaderModule measure_vs_ { VK_NULL_HANDLE };
   VkShaderModule fill_gbuffer_fs_ { VK_NULL_HANDLE };
   VkShaderModule gui_vs_{ VK_NULL_HANDLE };
   VkShaderModule gui_fs_{ VK_NULL_HANDLE };
   VkPipelineLayout gbuffer_pipeline_layout_ { VK_NULL_HANDLE };
   VkPipelineLayout gui_pipeline_layout_{ VK_NULL_HANDLE };
-  VkPipeline gbuffer_pipeline_direct_ { VK_NULL_HANDLE };
-  VkPipeline gbuffer_pipeline_indirect_ { VK_NULL_HANDLE };
+  VkPipeline visualize_pipeline_regular_mdi_wireframe_ { VK_NULL_HANDLE };
+  VkPipeline visualize_pipeline_regular_mdi_solid_ { VK_NULL_HANDLE };
+  VkPipeline visualize_pipeline_dgc_wireframe_ { VK_NULL_HANDLE };
+  VkPipeline visualize_pipeline_dgc_solid_ { VK_NULL_HANDLE };
+  VkPipeline measure_pipeline_alpha_ { VK_NULL_HANDLE };
+  VkPipeline measure_pipeline_beta_ { VK_NULL_HANDLE };
   VkPipeline gui_pipeline_{ VK_NULL_HANDLE };
   VkSemaphore image_available_semaphore_ { VK_NULL_HANDLE };
   VkSemaphore blit_swapchain_complete_ { VK_NULL_HANDLE };
@@ -148,7 +160,6 @@ private:
   // double-ended stack. This essentially corresponds to two buckets of dynamic
   // size. In a real world scenario one may want more elaborate infrastructure
   // that tracks an arbitrary amount of (likely equisized) buckets.
-  bool render_indirectly_ { true };
   VkDrawIndirectCommand* mapped_indirect_buffer_ { nullptr };
   std::unique_ptr<vk::Buffer> indirect_buffer_;
   const uint32_t max_draw_calls_ { 2000 };
@@ -156,8 +167,10 @@ private:
   uint32_t current_alpha_draw_calls_ { 0 };
   uint32_t current_beta_draw_calls_ { 0 };
 
-  VkObjectTableNVX object_table_ { VK_NULL_HANDLE };
-  VkIndirectCommandsLayoutNVX indirect_commands_layout_ { VK_NULL_HANDLE };
+  VkObjectTableNVX object_table_measure_ { VK_NULL_HANDLE };
+  VkObjectTableNVX object_table_visualize_ { VK_NULL_HANDLE };
+  VkIndirectCommandsLayoutNVX indirect_commands_layout_measure_ { VK_NULL_HANDLE };
+  VkIndirectCommandsLayoutNVX indirect_commands_layout_visualize_ { VK_NULL_HANDLE };
   std::unique_ptr<vk::Buffer> dgc_pipeline_parameters_;
   std::unique_ptr<vk::Buffer> dgc_push_constants_;
   struct Push {
@@ -169,6 +182,8 @@ private:
   DirectX::XMFLOAT4X4 view_ {};
   DirectX::XMFLOAT4X4 proj_ {};
 
-  bool render_ui_ { true };
   double measured_time_ { 0.0 };
+
+  bool measure_session_active_ { false };
+  RenderStrategy render_strategy_ { RenderStrategy::Regular };
 };

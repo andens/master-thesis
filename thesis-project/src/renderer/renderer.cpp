@@ -72,8 +72,10 @@ Renderer::~Renderer() {
     device_->vkUnmapMemory(dgc_push_constants_->vulkan_memory_handle());
     dgc_push_constants_->destroy(*device_);
     dgc_pipeline_parameters_->destroy(*device_);
-    device_->vkDestroyIndirectCommandsLayoutNVX(indirect_commands_layout_, nullptr);
-    device_->vkDestroyObjectTableNVX(object_table_, nullptr);
+    device_->vkDestroyIndirectCommandsLayoutNVX(indirect_commands_layout_measure_, nullptr);
+    device_->vkDestroyIndirectCommandsLayoutNVX(indirect_commands_layout_visualize_, nullptr);
+    device_->vkDestroyObjectTableNVX(object_table_measure_, nullptr);
+    device_->vkDestroyObjectTableNVX(object_table_visualize_, nullptr);
     device_->vkUnmapMemory(indirect_buffer_->vulkan_memory_handle());
     indirect_buffer_->destroy(*device_);
     vertex_buffer_->destroy(*device_);
@@ -92,13 +94,18 @@ Renderer::~Renderer() {
     device_->vkDestroySemaphore(gbuffer_generation_complete_, nullptr);
     device_->vkDestroySemaphore(blit_swapchain_complete_, nullptr);
     device_->vkDestroySemaphore(image_available_semaphore_, nullptr);
-    device_->vkDestroyPipeline(gbuffer_pipeline_direct_, nullptr);
-    device_->vkDestroyPipeline(gbuffer_pipeline_indirect_, nullptr);
+    device_->vkDestroyPipeline(visualize_pipeline_regular_mdi_wireframe_, nullptr);
+    device_->vkDestroyPipeline(visualize_pipeline_regular_mdi_solid_, nullptr);
+    device_->vkDestroyPipeline(visualize_pipeline_dgc_wireframe_, nullptr);
+    device_->vkDestroyPipeline(visualize_pipeline_dgc_solid_, nullptr);
+    device_->vkDestroyPipeline(measure_pipeline_alpha_, nullptr);
+    device_->vkDestroyPipeline(measure_pipeline_beta_, nullptr);
     device_->vkDestroyPipeline(gui_pipeline_, nullptr);
     device_->vkDestroyPipelineLayout(gbuffer_pipeline_layout_, nullptr);
     device_->vkDestroyPipelineLayout(gui_pipeline_layout_, nullptr);
     device_->vkDestroyShaderModule(fullscreen_triangle_vs_, nullptr);
-    device_->vkDestroyShaderModule(fill_gbuffer_vs_, nullptr);
+    device_->vkDestroyShaderModule(visualize_vs_, nullptr);
+    device_->vkDestroyShaderModule(measure_vs_, nullptr);
     device_->vkDestroyShaderModule(fill_gbuffer_fs_, nullptr);
     device_->vkDestroyShaderModule(gui_vs_, nullptr);
     device_->vkDestroyShaderModule(gui_fs_, nullptr);
@@ -164,12 +171,12 @@ void Renderer::render() {
   // ones (perhaps where one uses wireframe and the other solid). Direct rendering
   // would then want to enumerate with a filter and indirect uses one indirect
   // draw per pipeline, using count and offset accordingly.
-  if (render_indirectly_) {
-    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer_pipeline_indirect_);
-  }
-  else {
-    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer_pipeline_direct_);
-  }
+  //if (render_indirectly_) {
+  //  graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer_pipeline_indirect_);
+  //}
+  //else {
+  //  graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, gbuffer_pipeline_direct_);
+  //}
 
   VkViewport viewport {};
   viewport.x = 0.0f;
@@ -202,7 +209,28 @@ void Renderer::render() {
   VkBuffer vertex_buf = vertex_buffer_->vulkan_buffer_handle();
   VkDeviceSize offset = 0;
   graphics_cmd_buf_->vkCmdBindVertexBuffers(0, 1, &vertex_buf, &offset);
-  if (render_indirectly_) {
+
+  switch (render_strategy_) {
+  case RenderStrategy::Regular: {
+    // Alpha
+    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, measure_session_active_ ? measure_pipeline_alpha_ : visualize_pipeline_regular_mdi_solid_);
+    render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
+      if (job_context.pipeline == RenderCache::Pipeline::Alpha) {
+        graphics_cmd_buf_->vkCmdDraw(job_context.object_type == RenderObject::Box ? 36 : 2160, 1, job_context.object_type == RenderObject::Box ? 0 : 36, job_context.job);
+      }
+      return job_context.user_data;
+    });
+    // Beta
+    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, measure_session_active_ ? measure_pipeline_beta_ : visualize_pipeline_regular_mdi_wireframe_);
+    render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
+      if (job_context.pipeline == RenderCache::Pipeline::Beta) {
+        graphics_cmd_buf_->vkCmdDraw(job_context.object_type == RenderObject::Box ? 36 : 2160, 1, job_context.object_type == RenderObject::Box ? 0 : 36, job_context.job);
+      }
+      return job_context.user_data;
+    });
+    break;
+  }
+  case RenderStrategy::MDI: {
     update_indirect_buffer();
     // TODO: Set up the scene beforehand so that I don't have to care about
     // structural changes here. For ease of implementation, MDI will
@@ -211,27 +239,44 @@ void Renderer::render() {
     // accept changes here to result in incremental changes. Dirtify is one
     // change, but I also want to change pipelines for when I switch between
     // DGC with one material and DGC with two.
-    //graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, current_alpha_draw_calls_, sizeof(VkDrawIndirectCommand));
-    //graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), max_draw_calls_ - current_beta_draw_calls_, current_beta_draw_calls_, sizeof(VkDrawIndirectCommand));
+    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, measure_session_active_ ? measure_pipeline_alpha_ : visualize_pipeline_regular_mdi_solid_);
+    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, current_alpha_draw_calls_, sizeof(VkDrawIndirectCommand));
+    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, measure_session_active_ ? measure_pipeline_beta_ : visualize_pipeline_regular_mdi_wireframe_);
+    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), max_draw_calls_ - current_beta_draw_calls_, current_beta_draw_calls_, sizeof(VkDrawIndirectCommand));
+    break;
+  }
+  case RenderStrategy::DGC: {
+    update_indirect_buffer();
 
     // References to the input data for each token command.
     std::array<VkIndirectCommandsTokenNVX, 3> input_tokens {};
-    input_tokens[0].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_PIPELINE_NVX;
-    input_tokens[0].buffer = dgc_pipeline_parameters_->vulkan_buffer_handle();
-    input_tokens[0].offset = 0;
-    input_tokens[1].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_CONSTANT_NVX;
-    input_tokens[1].buffer = dgc_push_constants_->vulkan_buffer_handle();
-    input_tokens[1].offset = 0;
-    input_tokens[2].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_DRAW_NVX;
-    input_tokens[2].buffer = indirect_buffer_->vulkan_buffer_handle(); // Same as MDI
-    input_tokens[2].offset = 0;
+    uint32_t current_token = 0;
+    input_tokens[current_token].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_PIPELINE_NVX;
+    input_tokens[current_token].buffer = dgc_pipeline_parameters_->vulkan_buffer_handle();
+    input_tokens[current_token].offset = 0;
+    current_token++;
+    if (!measure_session_active_) {
+      input_tokens[current_token].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_CONSTANT_NVX;
+      input_tokens[current_token].buffer = dgc_push_constants_->vulkan_buffer_handle();
+      input_tokens[current_token].offset = 0;
+      current_token++;
+    }
+    input_tokens[current_token].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_DRAW_NVX;
+    input_tokens[current_token].buffer = indirect_buffer_->vulkan_buffer_handle(); // Same as MDI
+    input_tokens[current_token].offset = 0;
+    current_token++;
 
     VkCmdProcessCommandsInfoNVX commands_info {};
     commands_info.sType = VK_STRUCTURE_TYPE_CMD_PROCESS_COMMANDS_INFO_NVX;
     commands_info.pNext = nullptr;
-    commands_info.objectTable = object_table_;
-    commands_info.indirectCommandsLayout = indirect_commands_layout_;
-    commands_info.indirectCommandsTokenCount = static_cast<uint32_t>(input_tokens.size());
+    commands_info.objectTable = measure_session_active_ ? object_table_measure_ : object_table_visualize_;
+    // Use a different indirect commands layout depending on whether we are
+    // measuring or not. This generates commands without push constants for
+    // measure sessions, but more importantly replaces the object table with
+    // one where the pipelines are different. Note that the source index is
+    // the same, it just indexes a measure or visualize version accordingly.
+    commands_info.indirectCommandsLayout = measure_session_active_ ? indirect_commands_layout_measure_ : indirect_commands_layout_visualize_;
+    commands_info.indirectCommandsTokenCount = current_token;
     commands_info.pIndirectCommandsTokens = input_tokens.data();
     commands_info.maxSequencesCount = current_total_draw_calls_;
     commands_info.targetCommandBuffer = NULL; // Don't record into secondary buffer; implicitly reserve and execute in the processing command buffer instead
@@ -246,17 +291,15 @@ void Renderer::render() {
     if (current_total_draw_calls_ > 0) {
       graphics_cmd_buf_->vkCmdProcessCommandsNVX(&commands_info);
     }
+
+    break;
   }
-  else {
-    render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
-      graphics_cmd_buf_->vkCmdDraw(job_context.object_type == RenderObject::Box ? 36 : 2160, 1, job_context.object_type == RenderObject::Box ? 0 : 36, job_context.job);
-      return job_context.user_data;
-    });
+  default: throw;
   }
 
   graphics_cmd_buf_->vkCmdNextSubpass(VK_SUBPASS_CONTENTS_INLINE);
 
-  if (render_ui_) {
+  if (!measure_session_active_) {
     ImDrawData* draw_data = ImGui::GetDrawData();
     if (draw_data->TotalVtxCount != 0) {
       update_gui_vertex_data(draw_data);
@@ -477,6 +520,7 @@ void Renderer::use_matrices(DirectX::CXMMATRIX view, DirectX::CXMMATRIX proj) {
 void Renderer::create_instance() {
   vk::InstanceBuilder builder;
 
+  // TODO: Disabled because it crashes vkRegisterObjectsNVX
   //builder.use_layer("VK_LAYER_LUNARG_standard_validation");
 
   builder.use_extension("VK_EXT_debug_report");
@@ -500,8 +544,9 @@ void Renderer::update_transform(uint32_t render_job, DirectX::CXMMATRIX transfor
   });
 }
 
+// TODO: Replace with a method to begin/end measure sessions
 void Renderer::should_render_ui(bool should) {
-  render_ui_ = should;
+  //render_ui_ = should;
 }
 
 double Renderer::measured_time() const {
@@ -693,7 +738,8 @@ void Renderer::create_shaders() {
   };
 
   create_shader("shaders/fullscreen-triangle-vs.spv", fullscreen_triangle_vs_);
-  create_shader("shaders/fill-gbuffer-vs.spv", fill_gbuffer_vs_);
+  create_shader("shaders/visualize-vs.spv", visualize_vs_);
+  create_shader("shaders/measure-vs.spv", measure_vs_);
   create_shader("shaders/fill-gbuffer-ps.spv", fill_gbuffer_fs_);
   create_shader("shaders/gui-vs.spv", gui_vs_);
   create_shader("shaders/gui-ps.spv", gui_fs_);
@@ -701,46 +747,90 @@ void Renderer::create_shaders() {
 
 void Renderer::create_pipeline() {
   vk::PipelineLayoutBuilder layout_builder;
-  layout_builder.push_constant(VK_SHADER_STAGE_VERTEX_BIT, 0, 2 * sizeof(DirectX::XMFLOAT4X4));
+  layout_builder.push_constant(VK_SHADER_STAGE_VERTEX_BIT, 0, 2 * sizeof(DirectX::XMFLOAT4X4) + sizeof(uint32_t));
   layout_builder.descriptor_layout(render_jobs_descriptor_set_->layout().vulkan_handle());
   gbuffer_pipeline_layout_ = layout_builder.build(*device_);
 
-  vk::PipelineBuilder pipeline_builder;
+  // Visualization pipelines (4 total: 2x (wireframe/solid) regular/mdi + 2x (wireframe/solid) dgc
+  {
+    vk::PipelineBuilder pipeline_builder;
 
-  pipeline_builder.shader_stage(VK_SHADER_STAGE_VERTEX_BIT, fill_gbuffer_vs_);
+    pipeline_builder.shader_stage(VK_SHADER_STAGE_VERTEX_BIT, visualize_vs_);
 
-  struct SpecializationData {
-    uint32_t indirect_rendering;
-  } spec_data;
-  spec_data.indirect_rendering = 0;
-  pipeline_builder.shader_specialization_data(&spec_data, sizeof(spec_data));
-  pipeline_builder.shader_specialization_map(0, 0, sizeof(SpecializationData::indirect_rendering));
+    struct SpecializationData {
+      uint32_t using_dgc;
+    } spec_data;
+    spec_data.using_dgc = 0;
+    pipeline_builder.shader_specialization_data(&spec_data, sizeof(spec_data));
+    pipeline_builder.shader_specialization_map(0, 0, sizeof(SpecializationData::using_dgc));
 
-  pipeline_builder.shader_stage(VK_SHADER_STAGE_FRAGMENT_BIT, fill_gbuffer_fs_);
+    pipeline_builder.shader_stage(VK_SHADER_STAGE_FRAGMENT_BIT, fill_gbuffer_fs_);
 
-  pipeline_builder.vertex_layout([](auto& layout) {
-    layout.stream(0, 12 + 8 + 12, VK_VERTEX_INPUT_RATE_VERTEX); // pos + tex + normal
-    layout.attribute(0, VK_FORMAT_R32G32B32_SFLOAT, 0);
-    layout.attribute(1, VK_FORMAT_R32G32_SFLOAT, 12);
-    layout.attribute(2, VK_FORMAT_R32G32B32_SFLOAT, 20);
-  });
+    pipeline_builder.vertex_layout([](auto& layout) {
+      layout.stream(0, 12 + 8 + 12, VK_VERTEX_INPUT_RATE_VERTEX); // pos + tex + normal
+      layout.attribute(0, VK_FORMAT_R32G32B32_SFLOAT, 0);
+      layout.attribute(1, VK_FORMAT_R32G32_SFLOAT, 12);
+      layout.attribute(2, VK_FORMAT_R32G32B32_SFLOAT, 20);
+    });
 
-  pipeline_builder.ia_triangle_list();
-  pipeline_builder.vp_dynamic();
-  pipeline_builder.rs_fill_cull_back();
-  pipeline_builder.ms_none();
-  pipeline_builder.ds_enabled();
-  pipeline_builder.bs_none(2);
-  pipeline_builder.dynamic_state({
-    VK_DYNAMIC_STATE_VIEWPORT,
-    VK_DYNAMIC_STATE_SCISSOR
-  });
+    pipeline_builder.ia_triangle_list();
+    pipeline_builder.vp_dynamic();
+    pipeline_builder.rs_fill_cull_back();
+    pipeline_builder.ms_none();
+    pipeline_builder.ds_enabled();
+    pipeline_builder.bs_none(2);
+    pipeline_builder.dynamic_state({
+      VK_DYNAMIC_STATE_VIEWPORT,
+      VK_DYNAMIC_STATE_SCISSOR
+      });
 
-  gbuffer_pipeline_direct_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
+    visualize_pipeline_regular_mdi_solid_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
 
-  spec_data.indirect_rendering = 1;
+    spec_data.using_dgc = 1;
+    visualize_pipeline_dgc_solid_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
 
-  gbuffer_pipeline_indirect_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
+    pipeline_builder.rs_wireframe_cull_back();
+
+    spec_data.using_dgc = 0;
+    visualize_pipeline_regular_mdi_wireframe_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
+
+    spec_data.using_dgc = 1;
+    visualize_pipeline_dgc_wireframe_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
+  }
+
+  // Measure pipelines (2x alpha/beta)
+  {
+    vk::PipelineBuilder builder;
+    builder.shader_stage(VK_SHADER_STAGE_VERTEX_BIT, measure_vs_);
+
+    struct SpecializationData {
+      uint32_t alpha_variant;
+    } spec_data;
+    spec_data.alpha_variant = 0;
+    builder.shader_specialization_data(&spec_data, sizeof(spec_data));
+    builder.shader_specialization_map(0, 0, sizeof(SpecializationData::alpha_variant));
+
+    builder.vertex_layout([](auto& layout) {
+      layout.stream(0, 12 + 8 + 12, VK_VERTEX_INPUT_RATE_VERTEX); // pos + tex + normal
+      layout.attribute(0, VK_FORMAT_R32G32B32_SFLOAT, 0);
+      layout.attribute(1, VK_FORMAT_R32G32_SFLOAT, 12);
+      layout.attribute(2, VK_FORMAT_R32G32B32_SFLOAT, 20);
+    });
+    builder.ia_triangle_list();
+    builder.vp_dynamic();
+    builder.rs_none();
+    builder.ms_none();
+    builder.ds_none();
+    builder.bs_none(2);
+    builder.dynamic_state({
+      VK_DYNAMIC_STATE_VIEWPORT,
+      VK_DYNAMIC_STATE_SCISSOR,
+    });
+
+    measure_pipeline_beta_ = builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
+    spec_data.alpha_variant = 1;
+    measure_pipeline_alpha_ = builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
+  }
 
   vk::PipelineLayoutBuilder gui_layout_builder;
   gui_layout_builder.push_constant(VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(float) * 4); // GUI scaling and translation
@@ -1425,7 +1515,7 @@ void Renderer::create_object_table() {
   };
 
   std::array<uint32_t, 2> entry_counts {
-    1,
+    2,
     1,
   };
 
@@ -1449,19 +1539,47 @@ void Renderer::create_object_table() {
   table_info.maxSampledImagesPerDescriptor = 0;
   table_info.maxPipelineLayouts = 1;
 
-  VkResult result = device_->vkCreateObjectTableNVX(&table_info, nullptr, &object_table_);
+  VkResult result = device_->vkCreateObjectTableNVX(&table_info, nullptr, &object_table_measure_);
   if (result != VK_SUCCESS) {
-    throw std::runtime_error("Could not create object table.");
+    throw std::runtime_error("Could not create object table for measure rendering.");
+  }
+
+  result = device_->vkCreateObjectTableNVX(&table_info, nullptr, &object_table_visualize_);
+  if (result != VK_SUCCESS) {
+    throw std::runtime_error("Could not create object table for visualized rendering.");
   }
 }
 
 void Renderer::register_objects_in_table() {
   // Note: resource bindings can be registered at arbitrary indices within a
   // table.
-  VkObjectTablePipelineEntryNVX pipeline_entry {};
-  pipeline_entry.type = VK_OBJECT_ENTRY_TYPE_PIPELINE_NVX;
-  pipeline_entry.flags = VK_OBJECT_ENTRY_USAGE_GRAPHICS_BIT_NVX;
-  pipeline_entry.pipeline = gbuffer_pipeline_indirect_;
+  VkObjectTablePipelineEntryNVX alpha_pipeline_entry {};
+  alpha_pipeline_entry.type = VK_OBJECT_ENTRY_TYPE_PIPELINE_NVX;
+  alpha_pipeline_entry.flags = VK_OBJECT_ENTRY_USAGE_GRAPHICS_BIT_NVX;
+  alpha_pipeline_entry.pipeline = measure_pipeline_alpha_;
+
+  VkObjectTablePipelineEntryNVX beta_pipeline_entry {};
+  beta_pipeline_entry.type = VK_OBJECT_ENTRY_TYPE_PIPELINE_NVX;
+  beta_pipeline_entry.flags = VK_OBJECT_ENTRY_USAGE_GRAPHICS_BIT_NVX;
+  beta_pipeline_entry.pipeline = measure_pipeline_beta_;
+
+  std::vector<VkObjectTableEntryNVX const*> table_entries {
+    reinterpret_cast<VkObjectTableEntryNVX*>(&alpha_pipeline_entry),
+    reinterpret_cast<VkObjectTableEntryNVX*>(&beta_pipeline_entry),
+  };
+
+  std::vector<uint32_t> object_indices {
+    0,
+    1,
+  };
+
+  assert(table_entries.size() == object_indices.size());
+
+  // Bug: Crashes if the pipeline has rasterizerDiscardEnable set to VK_TRUE
+  VkResult result = device_->vkRegisterObjectsNVX(object_table_measure_, table_entries.size(), table_entries.data(), object_indices.data());
+  if (result != VK_SUCCESS) {
+    throw std::runtime_error("Could not register objects into measure rendering table.");
+  }
 
   VkObjectTablePushConstantEntryNVX push_constant_entry {};
   push_constant_entry.type = VK_OBJECT_ENTRY_TYPE_PUSH_CONSTANT_NVX;
@@ -1469,21 +1587,15 @@ void Renderer::register_objects_in_table() {
   push_constant_entry.pipelineLayout = gbuffer_pipeline_layout_;
   push_constant_entry.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
-  std::array<VkObjectTableEntryNVX const*, 2> table_entries {
-    reinterpret_cast<VkObjectTableEntryNVX*>(&pipeline_entry),
-    reinterpret_cast<VkObjectTableEntryNVX*>(&push_constant_entry),
-  };
+  table_entries.push_back(reinterpret_cast<VkObjectTableEntryNVX*>(&push_constant_entry));
+  object_indices.push_back(2);
 
-  std::array<uint32_t, 2> object_indices {
-    0,
-    0,
-  };
+  alpha_pipeline_entry.pipeline = visualize_pipeline_dgc_solid_;
+  beta_pipeline_entry.pipeline = visualize_pipeline_dgc_wireframe_;
 
-  static_assert(table_entries.size() == object_indices.size());
-
-  VkResult result = device_->vkRegisterObjectsNVX(object_table_, table_entries.size(), table_entries.data(), object_indices.data());
+  result = device_->vkRegisterObjectsNVX(object_table_visualize_, table_entries.size(), table_entries.data(), object_indices.data());
   if (result != VK_SUCCESS) {
-    throw std::runtime_error("Could not register objects into table.");
+    throw std::runtime_error("Could not register objects into visualized rendering table.");
   }
 }
 
@@ -1498,22 +1610,18 @@ void Renderer::create_indirect_commands_layout() {
   // VkIndirectCommandsLayoutNVX describes what calls a sequence consists of,
   // and we generate several invocations of this sequence later.
 
-  std::array<VkIndirectCommandsLayoutTokenNVX, 3> tokens {};
+  std::vector<VkIndirectCommandsLayoutTokenNVX> tokens {};
+  tokens.insert(tokens.begin(), 2, {});
 
   tokens[0].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_PIPELINE_NVX;
   tokens[0].bindingUnit = 0; // Not used for pipelines
   tokens[0].dynamicCount = 0; // Not used for pipelines
   tokens[0].divisor = 1;
 
-  tokens[1].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_CONSTANT_NVX;
-  tokens[1].bindingUnit = sizeof(DirectX::XMFLOAT4X4) * 2; // For push constants, this is the |offset| parameter
-  tokens[1].dynamicCount = sizeof(uint32_t); // For push constants, this is the |size| parameter
+  tokens[1].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_DRAW_NVX;
+  tokens[1].bindingUnit = 0; // Not used for draw
+  tokens[1].dynamicCount = 0; // Not used for draw
   tokens[1].divisor = 1;
-
-  tokens[2].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_DRAW_NVX;
-  tokens[2].bindingUnit = 0; // Not used for draw
-  tokens[2].dynamicCount = 0; // Not used for draw
-  tokens[2].divisor = 1;
 
   VkIndirectCommandsLayoutCreateInfoNVX layout_info {};
   layout_info.sType = VK_STRUCTURE_TYPE_INDIRECT_COMMANDS_LAYOUT_CREATE_INFO_NVX;
@@ -1523,9 +1631,23 @@ void Renderer::create_indirect_commands_layout() {
   layout_info.tokenCount = static_cast<uint32_t>(tokens.size());
   layout_info.pTokens = tokens.data();
 
-  VkResult result = device_->vkCreateIndirectCommandsLayoutNVX(&layout_info, nullptr, &indirect_commands_layout_);
+  VkResult result = device_->vkCreateIndirectCommandsLayoutNVX(&layout_info, nullptr, &indirect_commands_layout_measure_);
   if (result != VK_SUCCESS) {
-    throw std::runtime_error("Could not create indirect commands layout.");
+    throw std::runtime_error("Could not create indirect commands layout for measured rendering.");
+  }
+
+  tokens.insert(tokens.begin() + 1, {});
+  tokens[1].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_PUSH_CONSTANT_NVX;
+  tokens[1].bindingUnit = sizeof(DirectX::XMFLOAT4X4) * 2; // For push constants, this is the |offset| parameter
+  tokens[1].dynamicCount = sizeof(uint32_t); // For push constants, this is the |size| parameter
+  tokens[1].divisor = 1;
+
+  layout_info.tokenCount = static_cast<uint32_t>(tokens.size());
+  layout_info.pTokens = tokens.data();
+
+  result = device_->vkCreateIndirectCommandsLayoutNVX(&layout_info, nullptr, &indirect_commands_layout_visualize_);
+  if (result != VK_SUCCESS) {
+    throw std::runtime_error("Could not create indirect commands layout for visualized rendering.");
   }
 }
 
