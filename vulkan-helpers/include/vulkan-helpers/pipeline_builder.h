@@ -33,6 +33,8 @@ public:
   // rs: rasterizer state
   void rs_fill_cull_back();
   void rs_fill_cull_none();
+  void rs_wireframe_cull_back();
+  void rs_none();
   // ms: multisample state
   void ms_none();
   // ds: depth/stencil

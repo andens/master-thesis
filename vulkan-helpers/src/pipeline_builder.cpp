@@ -116,6 +116,38 @@ void PipelineBuilder::rs_fill_cull_none() {
   rasterization_info_.depthBiasSlopeFactor = 0.0f;
 }
 
+void PipelineBuilder::rs_wireframe_cull_back() {
+  rasterization_info_.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+  rasterization_info_.pNext = nullptr;
+  rasterization_info_.flags = 0;
+  rasterization_info_.depthClampEnable = VK_FALSE;
+  rasterization_info_.rasterizerDiscardEnable = VK_FALSE;
+  rasterization_info_.polygonMode = VK_POLYGON_MODE_LINE;
+  rasterization_info_.lineWidth = 1.0f;
+  rasterization_info_.cullMode = VK_CULL_MODE_BACK_BIT;
+  rasterization_info_.frontFace = VK_FRONT_FACE_CLOCKWISE;
+  rasterization_info_.depthBiasEnable = VK_FALSE;
+  rasterization_info_.depthBiasConstantFactor = 0.0f;
+  rasterization_info_.depthBiasClamp = 0.0f;
+  rasterization_info_.depthBiasSlopeFactor = 0.0f;
+}
+
+void PipelineBuilder::rs_none() {
+  rasterization_info_.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+  rasterization_info_.pNext = nullptr;
+  rasterization_info_.flags = 0;
+  rasterization_info_.depthClampEnable = VK_FALSE;
+  rasterization_info_.rasterizerDiscardEnable = VK_TRUE;
+  rasterization_info_.polygonMode = VK_POLYGON_MODE_FILL;
+  rasterization_info_.lineWidth = 1.0f;
+  rasterization_info_.cullMode = VK_CULL_MODE_NONE;
+  rasterization_info_.frontFace = VK_FRONT_FACE_CLOCKWISE;
+  rasterization_info_.depthBiasEnable = VK_FALSE;
+  rasterization_info_.depthBiasConstantFactor = 0.0f;
+  rasterization_info_.depthBiasClamp = 0.0f;
+  rasterization_info_.depthBiasSlopeFactor = 0.0f;
+}
+
 void PipelineBuilder::ms_none() {
   // Sampling configuration
   multisample_info_.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
