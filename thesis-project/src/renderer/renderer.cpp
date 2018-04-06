@@ -244,6 +244,15 @@ void Renderer::render() {
   case RenderStrategy::DGC: {
     update_indirect_buffer();
 
+    // DGC uses the same buffer as MDI, but the former uses a bunch of sequences
+    // that start from the beginning in one call, but MDI uses two calls (for
+    // changing pipelines) where the calls corresponding to the pipelines begin
+    // at each end of the buffer. As such there is a hole in the middle of the
+    // indirect buffer that DGC happily uses. Thus DGC will only work properly
+    // if the buffer is completely filled, which is not a problem because I
+    // expect to render the maximum objects at all times.
+    assert(current_total_draw_calls_ == max_draw_calls_);
+
     // References to the input data for each token command.
     std::array<VkIndirectCommandsTokenNVX, 3> input_tokens {};
     input_tokens[0].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_PIPELINE_NVX;
