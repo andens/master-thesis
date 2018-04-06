@@ -24,6 +24,7 @@ public:
     RenderObject object_type;
     Pipeline pipeline;
     void* user_data { nullptr };
+    bool was_enumerated_as_change { false };
   };
 
   enum class Change {

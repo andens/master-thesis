@@ -11,6 +11,7 @@ void RenderCache::start_rendering(uint32_t job, RenderObject object_type, Pipeli
   context.object_type = object_type;
   context.pipeline = pipeline;
   context.user_data = nullptr;
+  context.was_enumerated_as_change = false;
   changes_.push_back(std::make_pair(Change::Add, context));
 }
 
@@ -30,13 +31,20 @@ void RenderCache::dirtify(uint32_t job) {
 }
 
 void RenderCache::enumerate_all(std::function<void*(JobContext const&)> const& it) {
-  std::for_each(jobs_.begin(), jobs_.end(), [&it](std::pair<const uint32_t, JobContext>& context) {
-    auto user_data = it(context.second);
-    context.second.user_data = user_data;
-  });
-
   enumerate_changes([&it](Change, JobContext const& context) -> void* {
     return it(context);
+  });
+
+  std::for_each(jobs_.begin(), jobs_.end(), [&it](std::pair<const uint32_t, JobContext>& context) {
+    // Only process jobs that were not enumerated as a change, resetting those
+    // that were.
+    if (context.second.was_enumerated_as_change) {
+      context.second.was_enumerated_as_change = false;
+    }
+    else {
+      auto user_data = it(context.second);
+      context.second.user_data = user_data;
+    }
   });
 }
 
@@ -44,6 +52,7 @@ void RenderCache::enumerate_changes(std::function<void*(Change change, JobContex
   std::for_each(changes_.begin(), changes_.end(), [this, &it](std::pair<Change, JobContext>& c) {
     auto user_data = it(c.first, c.second);
     c.second.user_data = user_data;
+    c.second.was_enumerated_as_change = true;
 
     // When a job has been added or modified we synchronize with the complete
     // job store. Removed jobs have already been removed from the job store and
