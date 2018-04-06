@@ -34,13 +34,19 @@ public:
   };
 
 public:
+  // Note: Can be used when testing some stuff, but for measuring we should
+  // depend on the setup made by the renderer and not alter the set after
+  // changing the strategy.
   void start_rendering(uint32_t job, RenderObject object_type, Pipeline pipeline);
   void stop_rendering(uint32_t job);
+
   void dirtify(uint32_t job);
 
   void enumerate_all(std::function<void*(JobContext const&)> const& it);
   void enumerate_changes(std::function<void*(Change change, JobContext const&)> const& it);
   size_t job_count() const;
+
+  void clear();
 
 private:
   std::unordered_map<uint32_t, JobContext> jobs_;

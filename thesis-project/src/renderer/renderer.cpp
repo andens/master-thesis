@@ -64,6 +64,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   DirectX::XMStoreFloat4x4(&proj_, DirectX::XMMatrixIdentity());
 
   render_cache_.reset(new RenderCache);
+  use_render_strategy(render_strategy_);
 
   // Position the render jobs in a grid
   uint32_t rows = static_cast<uint32_t>(sqrtf(static_cast<float>(max_draw_calls_)));
@@ -535,6 +536,44 @@ void Renderer::should_render_ui(bool should) {
 
 double Renderer::measured_time() const {
   return measured_time_;
+}
+
+void Renderer::use_render_strategy(RenderStrategy strategy) {
+  render_strategy_ = strategy;
+
+  switch (strategy) {
+  case RenderStrategy::Regular: {
+    render_cache_->clear();
+    for (uint32_t i = 0; i < max_draw_calls_; ++i) {
+      render_cache_->start_rendering(i, i % 2 == 0 ? RenderObject::Sphere : RenderObject::Box, i <= max_draw_calls_ / 2 ? RenderCache::Pipeline::Alpha : RenderCache::Pipeline::Beta);
+    }
+    current_alpha_draw_calls_ = 0;
+    current_beta_draw_calls_ = 0;
+    current_total_draw_calls_ = 0;
+    break;
+  }
+  case RenderStrategy::MDI: {
+    render_cache_->clear();
+    for (uint32_t i = 0; i < max_draw_calls_; ++i) {
+      render_cache_->start_rendering(i, i % 2 == 0 ? RenderObject::Sphere : RenderObject::Box, i <= max_draw_calls_ / 2 ? RenderCache::Pipeline::Alpha : RenderCache::Pipeline::Beta);
+    }
+    current_alpha_draw_calls_ = 0;
+    current_beta_draw_calls_ = 0;
+    current_total_draw_calls_ = 0;
+    break;
+  }
+  case RenderStrategy::DGC: {
+    render_cache_->clear();
+    for (uint32_t i = 0; i < max_draw_calls_; ++i) {
+      render_cache_->start_rendering(i, i % 2 == 0 ? RenderObject::Sphere : RenderObject::Box, i <= max_draw_calls_ / 2 ? RenderCache::Pipeline::Alpha : RenderCache::Pipeline::Beta);
+    }
+    current_alpha_draw_calls_ = 0;
+    current_beta_draw_calls_ = 0;
+    current_total_draw_calls_ = 0;
+    break;
+  }
+  default: throw;
+  }
 }
 
 void Renderer::create_debug_callback() {
@@ -1055,9 +1094,9 @@ void Renderer::create_indirect_buffer() {
 #undef max
 void Renderer::update_indirect_buffer() {
   render_cache_->enumerate_changes([this](RenderCache::Change change, RenderCache::JobContext const& job_context) -> void* {
-    assert(current_total_draw_calls_ != max_draw_calls_);
     size_t indirect_buffer_element { std::numeric_limits<size_t>::max() };
     if (change == RenderCache::Change::Add) {
+      assert(current_total_draw_calls_ != max_draw_calls_);
       indirect_buffer_element = job_context.pipeline == RenderCache::Pipeline::Alpha ? current_alpha_draw_calls_ : max_draw_calls_ - 1 - current_beta_draw_calls_;
     }
     else {

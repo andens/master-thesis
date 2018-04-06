@@ -58,6 +58,7 @@ public:
   // blitting to swapchain and presenting. For fair measurements, the GUI
   // should also be disabled.
   double measured_time() const;
+  void use_render_strategy(RenderStrategy strategy);
 
 private:
   struct Vertex {

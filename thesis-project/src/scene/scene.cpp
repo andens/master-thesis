@@ -28,6 +28,7 @@ void Scene::update(float delta_time, Renderer& renderer) {
   // of one second. Every new reappearance switches mesh to demonstrate that
   // draw calls can not only be individually updated, they can also completely
   // alter what is rendered.
+  /*
   static float time = 0.0f;
   static bool stop_rendering = false;
   static bool box = true;
@@ -45,6 +46,7 @@ void Scene::update(float delta_time, Renderer& renderer) {
       }
     });
   }
+  */
 
   if (ImGui::Begin("Controls")) {
     if (ImGui::CollapsingHeader("Render time", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -63,6 +65,7 @@ void Scene::update(float delta_time, Renderer& renderer) {
 }
 
 Scene::Scene(Renderer& renderer) {
+  /*
   renderer.update_transform(0, DirectX::XMMatrixTranslation(0.0f, 0.0f, 10.0f));
   renderer.update_transform(1, DirectX::XMMatrixTranslation(5.0f, 0.0f, 10.0f));
 
@@ -70,6 +73,7 @@ Scene::Scene(Renderer& renderer) {
     cache.start_rendering(0, RenderObject::Box, RenderCache::Pipeline::Alpha);
     cache.start_rendering(1, RenderObject::Sphere, RenderCache::Pipeline::Alpha);
   });
+  */
 
   uint32_t entries = history_time_span_ / time_per_accumulation_;
   for (uint32_t i = 0; i < entries; ++i) {

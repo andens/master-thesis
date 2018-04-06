@@ -68,3 +68,8 @@ void RenderCache::enumerate_changes(std::function<void*(Change change, JobContex
 size_t RenderCache::job_count() const {
   return jobs_.size();
 }
+
+void RenderCache::clear() {
+  jobs_.clear();
+  changes_.clear();
+}
