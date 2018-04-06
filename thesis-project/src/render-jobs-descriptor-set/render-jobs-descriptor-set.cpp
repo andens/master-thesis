@@ -7,7 +7,7 @@
 #include <vulkan-helpers/descriptor_set_layout_builder.h>
 #include <vulkan-helpers/device.h>
 
-const uint32_t max_render_jobs = 10000;
+const uint32_t max_render_jobs = 100000;
 
 void RenderJobsDescriptorSet::destroy(vk::Device& device) {
   layout_->destroy(device);

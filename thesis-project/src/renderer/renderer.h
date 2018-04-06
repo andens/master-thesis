@@ -159,7 +159,7 @@ private:
   // that tracks an arbitrary amount of (likely equisized) buckets.
   VkDrawIndirectCommand* mapped_indirect_buffer_ { nullptr };
   std::unique_ptr<vk::Buffer> indirect_buffer_;
-  const uint32_t max_draw_calls_ { 2000 };
+  const uint32_t max_draw_calls_ { 100000 };
   uint32_t current_total_draw_calls_ { 0 };
   uint32_t current_alpha_draw_calls_ { 0 };
   uint32_t current_beta_draw_calls_ { 0 };
