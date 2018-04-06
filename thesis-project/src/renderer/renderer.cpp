@@ -64,6 +64,17 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   DirectX::XMStoreFloat4x4(&proj_, DirectX::XMMatrixIdentity());
 
   render_cache_.reset(new RenderCache);
+
+  // Position the render jobs in a grid
+  uint32_t rows = static_cast<uint32_t>(sqrtf(static_cast<float>(max_draw_calls_)));
+  float spacing = 2.0f;
+  float y = -0.5f * rows * spacing;
+  for (uint32_t i = 0; i < max_draw_calls_; ++i) {
+    update_transform(i, DirectX::XMMatrixTranslation((-0.5f * rows + static_cast<float>(i % rows)) * spacing, y, 140.0f));
+    if (i % rows == rows - 1) {
+      y += spacing;
+    }
+  }
 }
 
 Renderer::~Renderer() {
