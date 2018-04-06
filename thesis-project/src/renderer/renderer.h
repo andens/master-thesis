@@ -168,6 +168,7 @@ private:
   VkObjectTableNVX object_table_ { VK_NULL_HANDLE };
   VkIndirectCommandsLayoutNVX indirect_commands_layout_ { VK_NULL_HANDLE };
   std::unique_ptr<vk::Buffer> dgc_pipeline_parameters_;
+  uint32_t* mapped_dgc_pipeline_parameters_ { nullptr };
   std::unique_ptr<vk::Buffer> dgc_push_constants_;
   struct Push {
     uint32_t table_entry;
