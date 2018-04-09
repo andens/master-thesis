@@ -399,6 +399,14 @@ void Renderer::render() {
   // division: nanoseconds to milli
   gpu_render_time_ = static_cast<double>(query_data[1] - query_data[0]) * physical_device_properties_.limits.timestampPeriod / 1000000.0;
 
+  // Now that the frame has been processed, we iterate all jobs again to get an
+  // idea of the traversal overhead each technique suffers.
+  auto traversal_start_time = std::chrono::high_resolution_clock::now();
+  render_cache_->enumerate_all([](RenderCache::JobContext const& c) -> void* { return c.user_data; });
+  auto traversal_end_time = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double, std::milli> traversal_duration = traversal_end_time - traversal_start_time;
+  render_jobs_traversal_time_ = traversal_duration.count();
+
   // ┌─────────────────────────────────────────────────────────────────┐
   // │  Swapchain image acquisition                                    │
   // └─────────────────────────────────────────────────────────────────┘
@@ -568,6 +576,10 @@ double Renderer::measured_time() const {
 
 double Renderer::gpu_time() const {
   return gpu_render_time_;
+}
+
+double Renderer::render_jobs_traversal_time() const {
+  return render_jobs_traversal_time_;
 }
 
 void Renderer::use_render_strategy(RenderStrategy strategy) {

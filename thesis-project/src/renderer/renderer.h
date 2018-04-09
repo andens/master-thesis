@@ -62,6 +62,11 @@ public:
   // between total time and GPU time, provided that the GPU does not start
   // processing until the CPU work is completely done.
   double gpu_time() const;
+  // Returns the time spent traversing the render jobs data structure. This is
+  // overhead that is present for each technique and can be subtracted to get
+  // an idea of how the render strategy itself performs.
+  double render_jobs_traversal_time() const;
+
   void use_render_strategy(RenderStrategy strategy);
 
 private:
@@ -189,6 +194,7 @@ private:
 
   double measured_time_ { 0.0 };
   double gpu_render_time_ { 0.0 };
+  double render_jobs_traversal_time_ { 0.0 };
 
   bool measure_session_active_ { false };
   RenderStrategy render_strategy_ { RenderStrategy::Regular };
