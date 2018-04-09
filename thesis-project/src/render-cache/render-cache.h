@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <functional>
-#include <unordered_map>
 #include <vector>
 #include "../render-object-type/render-object-type.h"
 
@@ -19,18 +18,20 @@ public:
     Beta,
   };
 
+  enum class Change {
+    Add,
+    Remove,
+    Modify,
+    None,
+  };
+
   struct JobContext {
     uint32_t job { ~0u };
     RenderObject object_type;
     Pipeline pipeline;
+    Change change;
     void* user_data { nullptr };
     bool was_enumerated_as_change { false };
-  };
-
-  enum class Change {
-    Add,
-    Remove,
-    Modify
   };
 
 public:
@@ -42,13 +43,23 @@ public:
 
   void dirtify(uint32_t job);
 
+  // Enumerate all jobs, calling the user-provided |it| function on them.
+  // Changes are consumes in the process.
   void enumerate_all(std::function<void*(JobContext const&)> const& it);
+
+  // Enumerate only jobs that have changed in some way, consuming the change in
+  // the process. Note that this still iterates the entire vector; however,
+  // |it| is only called for changed jobs. This is deliberate to make all
+  // rendering strategies use the same traversal to eliminate variations in
+  // traversal overhead. The overhead is still there, but cancels when looking
+  // at differences between strategies.
   void enumerate_changes(std::function<void*(Change change, JobContext const&)> const& it);
-  size_t job_count() const;
 
   void clear();
 
+  RenderCache();
+
 private:
-  std::unordered_map<uint32_t, JobContext> jobs_;
-  std::vector<std::pair<Change, JobContext>> changes_;
+  const uint32_t max_draw_calls_ { 100000 };
+  std::vector<JobContext> jobs_;
 };
