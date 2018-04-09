@@ -59,6 +59,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   create_indirect_buffer();
   initialize_imgui();
   create_dgc_resources();
+  create_timing_resources();
 
   DirectX::XMStoreFloat4x4(&view_, DirectX::XMMatrixIdentity());
   DirectX::XMStoreFloat4x4(&proj_, DirectX::XMMatrixIdentity());
@@ -81,6 +82,7 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
 Renderer::~Renderer() {
   if (device_->device()) {
     device_->vkDeviceWaitIdle();
+    device_->vkDestroyQueryPool(query_pool_, nullptr);
     device_->vkUnmapMemory(dgc_push_constants_->vulkan_memory_handle());
     dgc_push_constants_->destroy(*device_);
     device_->vkUnmapMemory(dgc_pipeline_parameters_->vulkan_memory_handle());
@@ -156,6 +158,9 @@ void Renderer::render() {
   begin_info.pInheritanceInfo = nullptr;
 
   graphics_cmd_buf_->vkBeginCommandBuffer(&begin_info);
+
+  graphics_cmd_buf_->vkCmdResetQueryPool(query_pool_, 0, 2);
+  graphics_cmd_buf_->vkCmdWriteTimestamp(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query_pool_, 0); // All previous commands must have executed until the end
 
   // Clear values for G-buffer attachments as indicated by the subpass
   // attachment load operations of the render pass.
@@ -361,6 +366,8 @@ void Renderer::render() {
 
   graphics_cmd_buf_->vkCmdEndRenderPass();
 
+  graphics_cmd_buf_->vkCmdWriteTimestamp(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query_pool_, 1); // All previous commands must have executed until the end
+
   graphics_cmd_buf_->vkEndCommandBuffer();
 
   VkCommandBuffer cmd_buf = graphics_cmd_buf_->command_buffer();
@@ -377,9 +384,20 @@ void Renderer::render() {
   graphics_queue_->vkQueueSubmit(1, &submit_info, gbuffer_generation_fence_);
 
   device_->vkDeviceWaitIdle();
+
   auto end_time = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double, std::milli> duration = end_time - start_time;
   measured_time_ = duration.count();
+
+  uint64_t query_data[2];
+  VkResult query_result = device_->vkGetQueryPoolResults(query_pool_, 0, 2, sizeof(query_data), query_data, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+  if (query_result != VK_SUCCESS) {
+    throw;
+  }
+
+  // timestampPeriod: nanoseconds per tick
+  // division: nanoseconds to milli
+  gpu_render_time_ = static_cast<double>(query_data[1] - query_data[0]) * physical_device_properties_.limits.timestampPeriod / 1000000.0;
 
   // ┌─────────────────────────────────────────────────────────────────┐
   // │  Swapchain image acquisition                                    │
@@ -548,6 +566,10 @@ double Renderer::measured_time() const {
   return measured_time_;
 }
 
+double Renderer::gpu_time() const {
+  return gpu_render_time_;
+}
+
 void Renderer::use_render_strategy(RenderStrategy strategy) {
   render_strategy_ = strategy;
 
@@ -616,6 +638,8 @@ void Renderer::create_device() {
   graphics_queue_ = device_->graphics_queue();
   compute_queue_ = device_->compute_queue();
   present_queue_ = device_->present_queue();
+
+  device_->physical_device()->vkGetPhysicalDeviceProperties(&physical_device_properties_);
 }
 
 void Renderer::create_swapchain() {
@@ -1677,3 +1701,18 @@ void Renderer::reserve_space_for_indirect_commands() {
   indirect_cmd_buf_->vkEndCommandBuffer();
 }
 */
+
+void Renderer::create_timing_resources() {
+  VkQueryPoolCreateInfo pool_info {};
+  pool_info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+  pool_info.pNext = nullptr;
+  pool_info.flags = 0;
+  pool_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
+  pool_info.queryCount = 2;
+  pool_info.pipelineStatistics = 0;
+
+  VkResult result = device_->vkCreateQueryPool(&pool_info, nullptr, &query_pool_);
+  if (result != VK_SUCCESS) {
+    throw std::runtime_error("Could not create query pool.");
+  }
+}

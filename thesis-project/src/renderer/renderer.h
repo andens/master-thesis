@@ -58,6 +58,10 @@ public:
   // blitting to swapchain and presenting. For fair measurements, the GUI
   // should also be disabled.
   double measured_time() const;
+  // Returns the time spent on the GPU. CPU overhead is thus the difference
+  // between total time and GPU time, provided that the GPU does not start
+  // processing until the CPU work is completely done.
+  double gpu_time() const;
   void use_render_strategy(RenderStrategy strategy);
 
 private:
@@ -96,6 +100,7 @@ private:
   void register_objects_in_table();
   void create_indirect_commands_layout();
   //void reserve_space_for_indirect_commands();
+  void create_timing_resources();
 
 private:
   VkExtent2D render_area_ { 0, 0 };
@@ -107,6 +112,7 @@ private:
   std::shared_ptr<vk::Queue> graphics_queue_;
   std::shared_ptr<vk::Queue> compute_queue_;
   std::shared_ptr<vk::Queue> present_queue_;
+  VkPhysicalDeviceProperties physical_device_properties_;
   std::unique_ptr<vk::Swapchain> swapchain_;
   std::shared_ptr<vk::CommandPool> stable_graphics_cmd_pool_;
   std::shared_ptr<vk::CommandPool> transient_graphics_cmd_pool_;
@@ -176,10 +182,13 @@ private:
   };
   Push* mapped_dgc_push_constants_ { nullptr };
 
+  VkQueryPool query_pool_ { VK_NULL_HANDLE };
+
   DirectX::XMFLOAT4X4 view_ {};
   DirectX::XMFLOAT4X4 proj_ {};
 
   double measured_time_ { 0.0 };
+  double gpu_render_time_ { 0.0 };
 
   bool measure_session_active_ { false };
   RenderStrategy render_strategy_ { RenderStrategy::Regular };

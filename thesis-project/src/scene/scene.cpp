@@ -7,7 +7,7 @@
 
 void Scene::update(float delta_time, Renderer& renderer) {
   // Get the previous frame render time to update graph
-  accumulated_render_time_ += renderer.measured_time();
+  accumulated_render_time_ += (renderer.measured_time() - renderer.gpu_time());
   accumulated_frames_++;
   accumulation_timer_ += delta_time;
   if (accumulation_timer_ > time_per_accumulation_) {
