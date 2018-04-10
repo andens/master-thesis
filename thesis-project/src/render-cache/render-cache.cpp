@@ -34,6 +34,7 @@ void RenderCache::enumerate_all(std::function<void*(JobContext const&)> const& i
   });
 }
 
+/*
 void RenderCache::enumerate_changes(std::function<void*(Change change, JobContext const&)> const& it) {
   std::for_each(jobs_.begin(), jobs_.end(), [this, &it](JobContext& c) {
     if (c.change != Change::None) {
@@ -44,6 +45,7 @@ void RenderCache::enumerate_changes(std::function<void*(Change change, JobContex
     }
   });
 }
+*/
 
 void RenderCache::clear() {
   jobs_.clear();

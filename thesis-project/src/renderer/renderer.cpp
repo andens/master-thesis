@@ -1190,8 +1190,8 @@ void Renderer::create_indirect_buffer() {
 #pragma push_macro("max")
 #undef max
 void Renderer::update_indirect_buffer() {
-  render_cache_->enumerate_changes([this](RenderCache::Change change, RenderCache::JobContext const& job_context) -> void* {
-    assert(change == RenderCache::Change::Modify);
+  render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
+    assert(job_context.change == RenderCache::Change::None || job_context.change == RenderCache::Change::Modify);
 
     size_t indirect_buffer_element = job_context.job;
 

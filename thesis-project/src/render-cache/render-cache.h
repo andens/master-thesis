@@ -52,7 +52,7 @@ public:
   // rendering strategies use the same traversal to eliminate variations in
   // traversal overhead. The overhead is still there, but cancels when looking
   // at differences between strategies.
-  void enumerate_changes(std::function<void*(Change change, JobContext const&)> const& it);
+  //void enumerate_changes(std::function<void*(Change change, JobContext const&)> const& it);
 
   void clear();
 
