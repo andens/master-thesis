@@ -267,15 +267,6 @@ void Renderer::render() {
       break;
     }
 
-    // DGC uses the same buffer as MDI, but the former uses a bunch of sequences
-    // that start from the beginning in one call, but MDI uses two calls (for
-    // changing pipelines) where the calls corresponding to the pipelines begin
-    // at each end of the buffer. As such there is a hole in the middle of the
-    // indirect buffer that DGC happily uses. Thus DGC will only work properly
-    // if the buffer is completely filled, which is not a problem because I
-    // expect to render the maximum objects at all times.
-    assert(current_total_draw_calls_ == max_draw_calls_);
-
     graphics_cmd_buf_->vkCmdWriteTimestamp(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query_pool_, 2); // All previous commands must have executed until the end
 
     // References to the input data for each token command.
@@ -297,7 +288,7 @@ void Renderer::render() {
     commands_info.indirectCommandsLayout = indirect_commands_layout_;
     commands_info.indirectCommandsTokenCount = static_cast<uint32_t>(input_tokens.size());
     commands_info.pIndirectCommandsTokens = input_tokens.data();
-    commands_info.maxSequencesCount = current_total_draw_calls_;
+    commands_info.maxSequencesCount = max_draw_calls_; // Actual count because of no count buffer
     commands_info.targetCommandBuffer = dgc_cmd_buf_->command_buffer();
     commands_info.sequencesCountBuffer = VK_NULL_HANDLE; // Don't source count from a buffer, I provide actual count in |maxSequencesCount|
     commands_info.sequencesCountOffset = 0; // Not used (no sequencesCountBuffer)
@@ -307,9 +298,9 @@ void Renderer::render() {
     // the geometry is rendered anyways. The command buffer probably is reset
     // because the object properly vanishes if I don't call the method, but it
     // really should work even when I tell it to generate no sequence at all.
-    if (current_total_draw_calls_ > 0) {
+    //if (current_total_draw_calls_ > 0) {
       graphics_cmd_buf_->vkCmdProcessCommandsNVX(&commands_info);
-    }
+    //}
 
     // Synchronize the generation of commands in this pass before they are
     // consumed in the next.
@@ -643,10 +634,6 @@ double Renderer::render_jobs_traversal_time() const {
 
 void Renderer::use_render_strategy(RenderStrategy strategy) {
   render_strategy_ = strategy;
-
-  current_alpha_draw_calls_ = 0;
-  current_beta_draw_calls_ = 0;
-  current_total_draw_calls_ = 0;
 }
 
 void Renderer::create_debug_callback() {
