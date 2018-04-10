@@ -233,18 +233,14 @@ void Renderer::render() {
     break;
   }
   case RenderStrategy::MDI: {
-    update_indirect_buffer();
-    // TODO: Set up the scene beforehand so that I don't have to care about
-    // structural changes here. For ease of implementation, MDI will
-    // not bother with the pipeline and always use the same. In real life, one
-    // would have to organize the draw calls by pipeline. I still want to
-    // accept changes here to result in incremental changes. Dirtify is one
-    // change, but I also want to change pipelines for when I switch between
-    // DGC with one material and DGC with two.
-    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_regular_mdi_solid_);
-    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, 50000, sizeof(VkDrawIndirectCommand));
-    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_regular_mdi_wireframe_);
-    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 50000 * sizeof(VkDrawIndirectCommand), 50000, sizeof(VkDrawIndirectCommand));
+    uint32_t last_switched_job = 0;
+    update_indirect_buffer([this, &last_switched_job](uint32_t job, VkPipeline pipeline) {
+      if (job != 0) {
+        graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+        graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), last_switched_job * sizeof(VkDrawIndirectCommand), job - last_switched_job, sizeof(VkDrawIndirectCommand));
+        last_switched_job = job;
+      }
+    });
     break;
   }
   case RenderStrategy::DGC: {
@@ -254,7 +250,7 @@ void Renderer::render() {
     // an implicit sync between generation and execution, thus preventing me
     // from timing just the generation. Execution is done in the next subpass.
 
-    update_indirect_buffer();
+    update_indirect_buffer([](uint32_t, VkPipeline) {});
 
     // Before generating commands we must allocate space in the target command
     // buffer. This must be done in a render pass (reuse the current one with
@@ -1189,9 +1185,21 @@ void Renderer::create_indirect_buffer() {
 
 #pragma push_macro("max")
 #undef max
-void Renderer::update_indirect_buffer() {
-  render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
-    assert(job_context.change == RenderCache::Change::None || job_context.change == RenderCache::Change::Modify);
+void Renderer::update_indirect_buffer(std::function<void(uint32_t job, VkPipeline pipeline)> const& pipeline_switch) {
+  RenderCache::Pipeline current_pipeline = RenderCache::Pipeline::Alpha;
+
+  render_cache_->enumerate_all([this, &current_pipeline, &pipeline_switch](RenderCache::JobContext const& job_context) -> void* {
+    if (current_pipeline != job_context.pipeline) {
+      pipeline_switch(job_context.job, current_pipeline == RenderCache::Pipeline::Alpha ? pipeline_regular_mdi_solid_ : pipeline_regular_mdi_wireframe_);
+    }
+
+    current_pipeline = job_context.pipeline;
+
+    if (job_context.change == RenderCache::Change::None) {
+      return job_context.user_data;
+    }
+
+    assert(job_context.change == RenderCache::Change::Modify);
 
     size_t indirect_buffer_element = job_context.job;
 
@@ -1228,6 +1236,8 @@ void Renderer::update_indirect_buffer() {
 
     return reinterpret_cast<void*>(indirect_buffer_element);
   });
+
+  pipeline_switch(max_draw_calls_, current_pipeline == RenderCache::Pipeline::Alpha ? pipeline_regular_mdi_solid_ : pipeline_regular_mdi_wireframe_);
 }
 #pragma pop_macro("max");
 
