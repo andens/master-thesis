@@ -777,7 +777,7 @@ void Renderer::create_render_pass() {
   static_assert(buf_count == 2); // Ordinary buffers. There is also an additional depth
   builder.graphics_subpass([](vk::Subpass& subpass) {
     subpass.color_attachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    subpass.preserve_attachment(1); // Normal
+    subpass.color_attachment(1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     subpass.depth_stencil_attachment(2, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL); // Depth
   });
 
