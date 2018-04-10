@@ -248,7 +248,28 @@ void Renderer::render() {
     break;
   }
   case RenderStrategy::DGC: {
+    // At this point in time we only generate the commands. The reason I split
+    // DGC into two parts is that calling vkCmdProcessCommandsNVX with a null
+    // target command buffer executes the generated commands immediately with
+    // an implicit sync between generation and execution, thus preventing me
+    // from timing just the generation. Execution is done in the next subpass.
+
     update_indirect_buffer();
+
+    // Before generating commands we must allocate space in the target command
+    // buffer. This must be done in a render pass (reuse the current one with
+    // its state), and executed in a primary command buffer because it is a
+    // secondary buffer after all (the current one). We ignore recording this
+    // first time, meaning that the next subpass executes the default recording
+    // which happens to be the reservation command.
+    static bool first = true;
+    if (first) {
+      first = false;
+      // To not block waiting for queries that never happen.
+      graphics_cmd_buf_->vkCmdWriteTimestamp(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query_pool_, 2);
+      graphics_cmd_buf_->vkCmdWriteTimestamp(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query_pool_, 3);
+      break;
+    }
 
     // DGC uses the same buffer as MDI, but the former uses a bunch of sequences
     // that start from the beginning in one call, but MDI uses two calls (for
@@ -281,7 +302,7 @@ void Renderer::render() {
     commands_info.indirectCommandsTokenCount = static_cast<uint32_t>(input_tokens.size());
     commands_info.pIndirectCommandsTokens = input_tokens.data();
     commands_info.maxSequencesCount = current_total_draw_calls_;
-    commands_info.targetCommandBuffer = NULL; // Don't record into secondary buffer; implicitly reserve and execute in the processing command buffer instead
+    commands_info.targetCommandBuffer = dgc_cmd_buf_->command_buffer();
     commands_info.sequencesCountBuffer = VK_NULL_HANDLE; // Don't source count from a buffer, I provide actual count in |maxSequencesCount|
     commands_info.sequencesCountOffset = 0; // Not used (no sequencesCountBuffer)
     commands_info.sequencesIndexBuffer = VK_NULL_HANDLE; // No custom sequence indices; rely on default 1, 2, ....
@@ -294,6 +315,24 @@ void Renderer::render() {
       graphics_cmd_buf_->vkCmdProcessCommandsNVX(&commands_info);
     }
 
+    // Synchronize the generation of commands in this pass before they are
+    // consumed in the next.
+    VkMemoryBarrier dgc_generation_barrier {};
+    dgc_generation_barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    dgc_generation_barrier.pNext = nullptr;
+    dgc_generation_barrier.srcAccessMask = VK_ACCESS_COMMAND_PROCESS_WRITE_BIT_NVX; // Write command buffer output (read is reading input buffers)
+    dgc_generation_barrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT; // Output is consumed by the draw indirect pipeline stage (reading)
+    graphics_cmd_buf_->vkCmdPipelineBarrier(
+      VK_PIPELINE_STAGE_COMMAND_PROCESS_BIT_NVX,
+      VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+      0,
+      1, &dgc_generation_barrier,
+      0, nullptr,
+      0, nullptr
+    );
+
+    // The intention here is to not wait for anything. At the time this query
+    // is reached, the barrier should have waited for the writes to finish.
     graphics_cmd_buf_->vkCmdWriteTimestamp(VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, query_pool_, 3);
 
     break;
@@ -301,7 +340,14 @@ void Renderer::render() {
   default: throw;
   }
 
+  // If the strategy is DGC, the next subpass executes the commands generated
+  // in the first one.
   graphics_cmd_buf_->vkCmdNextSubpass(VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+
+  if (render_strategy_ == RenderStrategy::DGC) {
+    VkCommandBuffer cmd_buf = dgc_cmd_buf_->command_buffer();
+    graphics_cmd_buf_->vkCmdExecuteCommands(1, &cmd_buf);
+  }
 
   graphics_cmd_buf_->vkCmdNextSubpass(VK_SUBPASS_CONTENTS_INLINE);
 
@@ -890,7 +936,7 @@ void Renderer::create_pipeline() {
     pipeline_regular_mdi_solid_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
 
     spec_data.using_dgc = 1;
-    pipeline_dgc_solid_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
+    pipeline_dgc_solid_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 1);
 
     pipeline_builder.rs_wireframe_cull_back();
 
@@ -898,7 +944,7 @@ void Renderer::create_pipeline() {
     pipeline_regular_mdi_wireframe_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
 
     spec_data.using_dgc = 1;
-    pipeline_dgc_wireframe_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 0);
+    pipeline_dgc_wireframe_ = pipeline_builder.build(*device_, gbuffer_pipeline_layout_, gbuffer_render_pass_, 1);
   }
 
   vk::PipelineLayoutBuilder gui_layout_builder;
