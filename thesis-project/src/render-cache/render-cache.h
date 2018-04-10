@@ -35,11 +35,10 @@ public:
   };
 
 public:
-  // Note: Can be used when testing some stuff, but for measuring we should
-  // depend on the setup made by the renderer and not alter the set after
-  // changing the strategy.
-  void start_rendering(uint32_t job, RenderObject object_type, Pipeline pipeline);
-  void stop_rendering(uint32_t job);
+  // Should not be used. Had a purpose with early ideas, but for simplicity I
+  // just hardcode the number of objects and they don't change.
+  //void start_rendering(uint32_t job, RenderObject object_type, Pipeline pipeline); 
+  //void stop_rendering(uint32_t job);
 
   void dirtify(uint32_t job);
 

@@ -242,9 +242,9 @@ void Renderer::render() {
     // change, but I also want to change pipelines for when I switch between
     // DGC with one material and DGC with two.
     graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_regular_mdi_solid_);
-    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, current_alpha_draw_calls_, sizeof(VkDrawIndirectCommand));
+    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 0, 50000, sizeof(VkDrawIndirectCommand));
     graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_regular_mdi_wireframe_);
-    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), (max_draw_calls_ - current_beta_draw_calls_) * sizeof(VkDrawIndirectCommand), current_beta_draw_calls_, sizeof(VkDrawIndirectCommand));
+    graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), 50000 * sizeof(VkDrawIndirectCommand), 50000, sizeof(VkDrawIndirectCommand));
     break;
   }
   case RenderStrategy::DGC: {
@@ -648,39 +648,9 @@ double Renderer::render_jobs_traversal_time() const {
 void Renderer::use_render_strategy(RenderStrategy strategy) {
   render_strategy_ = strategy;
 
-  switch (strategy) {
-  case RenderStrategy::Regular: {
-    render_cache_->clear();
-    for (uint32_t i = 0; i < max_draw_calls_; ++i) {
-      render_cache_->start_rendering(i, i % 2 == 0 ? RenderObject::Sphere : RenderObject::Box, i <= max_draw_calls_ / 2 ? RenderCache::Pipeline::Alpha : RenderCache::Pipeline::Beta);
-    }
-    current_alpha_draw_calls_ = 0;
-    current_beta_draw_calls_ = 0;
-    current_total_draw_calls_ = 0;
-    break;
-  }
-  case RenderStrategy::MDI: {
-    render_cache_->clear();
-    for (uint32_t i = 0; i < max_draw_calls_; ++i) {
-      render_cache_->start_rendering(i, i % 2 == 0 ? RenderObject::Sphere : RenderObject::Box, i <= max_draw_calls_ / 2 ? RenderCache::Pipeline::Alpha : RenderCache::Pipeline::Beta);
-    }
-    current_alpha_draw_calls_ = 0;
-    current_beta_draw_calls_ = 0;
-    current_total_draw_calls_ = 0;
-    break;
-  }
-  case RenderStrategy::DGC: {
-    render_cache_->clear();
-    for (uint32_t i = 0; i < max_draw_calls_; ++i) {
-      render_cache_->start_rendering(i, i % 2 == 0 ? RenderObject::Sphere : RenderObject::Box, i <= max_draw_calls_ / 2 ? RenderCache::Pipeline::Alpha : RenderCache::Pipeline::Beta);
-    }
-    current_alpha_draw_calls_ = 0;
-    current_beta_draw_calls_ = 0;
-    current_total_draw_calls_ = 0;
-    break;
-  }
-  default: throw;
-  }
+  current_alpha_draw_calls_ = 0;
+  current_beta_draw_calls_ = 0;
+  current_total_draw_calls_ = 0;
 }
 
 void Renderer::create_debug_callback() {
@@ -1221,104 +1191,40 @@ void Renderer::create_indirect_buffer() {
 #undef max
 void Renderer::update_indirect_buffer() {
   render_cache_->enumerate_changes([this](RenderCache::Change change, RenderCache::JobContext const& job_context) -> void* {
-    size_t indirect_buffer_element { std::numeric_limits<size_t>::max() };
-    if (change == RenderCache::Change::Add) {
-      assert(current_total_draw_calls_ != max_draw_calls_);
-      indirect_buffer_element = job_context.pipeline == RenderCache::Pipeline::Alpha ? current_alpha_draw_calls_ : max_draw_calls_ - 1 - current_beta_draw_calls_;
-    }
-    else {
-      assert(change == RenderCache::Change::Modify || change == RenderCache::Change::Remove);
-      indirect_buffer_element = reinterpret_cast<size_t>(job_context.user_data);
-    }
+    assert(change == RenderCache::Change::Modify);
 
-    if (change == RenderCache::Change::Add || change == RenderCache::Change::Modify) {
-      VkDrawIndirectCommand* indirect_command = mapped_indirect_buffer_ + indirect_buffer_element;
-      indirect_command->vertexCount = job_context.object_type == RenderObject::Box ? 36 : 2160;
-      indirect_command->instanceCount = 1;
-      indirect_command->firstVertex = job_context.object_type == RenderObject::Box ? 0 : 36;
-      indirect_command->firstInstance = job_context.job;
+    size_t indirect_buffer_element = job_context.job;
 
-      uint32_t* pipeline = mapped_dgc_pipeline_parameters_ + indirect_buffer_element;
-      *pipeline = job_context.pipeline == RenderCache::Pipeline::Alpha ? 0 : 1;
+    VkDrawIndirectCommand* indirect_command = mapped_indirect_buffer_ + indirect_buffer_element;
+    indirect_command->vertexCount = job_context.object_type == RenderObject::Box ? 36 : 2160;
+    indirect_command->instanceCount = 1;
+    indirect_command->firstVertex = job_context.object_type == RenderObject::Box ? 0 : 36;
+    indirect_command->firstInstance = job_context.job;
 
-      Push* push = mapped_dgc_push_constants_ + indirect_buffer_element;
-      push->table_entry = 0;
-      push->actual_data = job_context.job;
+    uint32_t* pipeline = mapped_dgc_pipeline_parameters_ + indirect_buffer_element;
+    *pipeline = job_context.pipeline == RenderCache::Pipeline::Alpha ? 0 : 1;
 
-      std::array<VkMappedMemoryRange, 3> flush_ranges {};
-      flush_ranges[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-      flush_ranges[0].pNext = nullptr;
-      flush_ranges[0].memory = indirect_buffer_->vulkan_memory_handle();
-      flush_ranges[0].offset = indirect_buffer_element * sizeof(VkDrawIndirectCommand);
-      flush_ranges[0].size = sizeof(VkDrawIndirectCommand);
-      flush_ranges[1].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-      flush_ranges[1].pNext = nullptr;
-      flush_ranges[1].memory = dgc_pipeline_parameters_->vulkan_memory_handle();
-      flush_ranges[1].offset = indirect_buffer_element * sizeof(uint32_t);
-      flush_ranges[1].size = sizeof(uint32_t);
-      flush_ranges[2].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-      flush_ranges[2].pNext = nullptr;
-      flush_ranges[2].memory = dgc_push_constants_->vulkan_memory_handle();
-      flush_ranges[2].offset = indirect_buffer_element * sizeof(Push);
-      flush_ranges[2].size = sizeof(Push);
-      device_->vkFlushMappedMemoryRanges(static_cast<uint32_t>(flush_ranges.size()), flush_ranges.data());
-    }
-    else {
-      assert(change == RenderCache::Change::Remove);
-      VkDrawIndirectCommand* removed_command = mapped_indirect_buffer_ + indirect_buffer_element;
-      VkDrawIndirectCommand* last_command { nullptr };
+    Push* push = mapped_dgc_push_constants_ + indirect_buffer_element;
+    push->table_entry = 0;
+    push->actual_data = job_context.job;
 
-      if (job_context.pipeline == RenderCache::Pipeline::Alpha) {
-        assert(current_alpha_draw_calls_ > 0);
-        last_command = mapped_indirect_buffer_ + (current_alpha_draw_calls_ - 1);
-      }
-      else {
-        assert(job_context.pipeline == RenderCache::Pipeline::Beta && current_beta_draw_calls_ > 0);
-        last_command = mapped_indirect_buffer_ + (max_draw_calls_ - current_beta_draw_calls_);
-      }
-
-      // If we removed something other than the bucket head, we move the head
-      // into it's slot and flush the new data to the GPU. This avoids holes
-      // when removing draw calls.
-      if (removed_command != last_command) {
-        *removed_command = *last_command;
-
-        uint32_t* removed_pipeline = mapped_dgc_pipeline_parameters_ + indirect_buffer_element;
-        uint32_t* last_pipeline = mapped_dgc_pipeline_parameters_ + (last_command - mapped_indirect_buffer_);
-        *removed_pipeline = *last_pipeline;
-
-        Push* removed_push = mapped_dgc_push_constants_ + indirect_buffer_element;
-        Push* last_push = mapped_dgc_push_constants_ + (last_command - mapped_indirect_buffer_); // I'm lazy, get same offset using pointer arithmetic
-        *removed_push = *last_push;
-
-        std::array<VkMappedMemoryRange, 3> flush_ranges {};
-        flush_ranges[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-        flush_ranges[0].pNext = nullptr;
-        flush_ranges[0].memory = indirect_buffer_->vulkan_memory_handle();
-        flush_ranges[0].offset = indirect_buffer_element * sizeof(VkDrawIndirectCommand);
-        flush_ranges[0].size = sizeof(VkDrawIndirectCommand);
-        flush_ranges[1].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-        flush_ranges[1].pNext = nullptr;
-        flush_ranges[1].memory = dgc_pipeline_parameters_->vulkan_memory_handle();
-        flush_ranges[1].offset = indirect_buffer_element * sizeof(uint32_t);
-        flush_ranges[1].size = sizeof(uint32_t);
-        flush_ranges[2].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-        flush_ranges[2].pNext = nullptr;
-        flush_ranges[2].memory = dgc_push_constants_->vulkan_memory_handle();
-        flush_ranges[2].offset = indirect_buffer_element * sizeof(Push);
-        flush_ranges[2].size = sizeof(Push);
-        device_->vkFlushMappedMemoryRanges(static_cast<uint32_t>(flush_ranges.size()), flush_ranges.data());
-      }
-    }
-
-    if (change == RenderCache::Change::Add) {
-      job_context.pipeline == RenderCache::Pipeline::Alpha ? current_alpha_draw_calls_++ : current_beta_draw_calls_++;
-      current_total_draw_calls_++;
-    }
-    else if (change == RenderCache::Change::Remove) {
-      job_context.pipeline == RenderCache::Pipeline::Alpha ? current_alpha_draw_calls_-- : current_beta_draw_calls_--;
-      current_total_draw_calls_--;
-    }
+    std::array<VkMappedMemoryRange, 3> flush_ranges {};
+    flush_ranges[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+    flush_ranges[0].pNext = nullptr;
+    flush_ranges[0].memory = indirect_buffer_->vulkan_memory_handle();
+    flush_ranges[0].offset = indirect_buffer_element * sizeof(VkDrawIndirectCommand);
+    flush_ranges[0].size = sizeof(VkDrawIndirectCommand);
+    flush_ranges[1].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+    flush_ranges[1].pNext = nullptr;
+    flush_ranges[1].memory = dgc_pipeline_parameters_->vulkan_memory_handle();
+    flush_ranges[1].offset = indirect_buffer_element * sizeof(uint32_t);
+    flush_ranges[1].size = sizeof(uint32_t);
+    flush_ranges[2].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+    flush_ranges[2].pNext = nullptr;
+    flush_ranges[2].memory = dgc_push_constants_->vulkan_memory_handle();
+    flush_ranges[2].offset = indirect_buffer_element * sizeof(Push);
+    flush_ranges[2].size = sizeof(Push);
+    device_->vkFlushMappedMemoryRanges(static_cast<uint32_t>(flush_ranges.size()), flush_ranges.data());
 
     return reinterpret_cast<void*>(indirect_buffer_element);
   });

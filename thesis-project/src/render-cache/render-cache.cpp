@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+/*
 void RenderCache::start_rendering(uint32_t job, RenderObject object_type, Pipeline pipeline) {
   // Note: this is a very trivial approach to adding a render job. We do not
   // consider whether the job is already in the cache. It would be proper to
@@ -19,6 +20,7 @@ void RenderCache::start_rendering(uint32_t job, RenderObject object_type, Pipeli
 void RenderCache::stop_rendering(uint32_t job) {
   jobs_[job].change = Change::Remove;
 }
+*/
 
 void RenderCache::dirtify(uint32_t job) {
   jobs_[job].change = Change::Modify;
@@ -51,7 +53,7 @@ void RenderCache::clear() {
     context.job = i;
     context.object_type = RenderObject::Box;
     context.pipeline = Pipeline::Alpha;
-    context.change = Change::None;
+    context.change = Change::Modify; // To write indirect buffers on first access
     context.user_data = nullptr;
     context.was_enumerated_as_change = false;
     jobs_.push_back(context);
