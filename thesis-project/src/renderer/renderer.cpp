@@ -301,6 +301,8 @@ void Renderer::render() {
   default: throw;
   }
 
+  graphics_cmd_buf_->vkCmdNextSubpass(VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+
   graphics_cmd_buf_->vkCmdNextSubpass(VK_SUBPASS_CONTENTS_INLINE);
 
   if (!measure_session_active_) {
@@ -725,8 +727,16 @@ void Renderer::create_render_pass() {
     subpass.depth_stencil_attachment(buf_count, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
   });
 
-  // Render GUI to albedo pass
+  // Render DGC subpass
   static_assert(buf_count == 2); // Ordinary buffers. There is also an additional depth
+  builder.graphics_subpass([](vk::Subpass& subpass) {
+    subpass.color_attachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    subpass.preserve_attachment(1); // Normal
+    subpass.depth_stencil_attachment(2, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL); // Depth
+  });
+
+  // Render GUI to albedo pass
+  static_assert(buf_count == 2);
   builder.graphics_subpass([](vk::Subpass& subpass) {
     subpass.color_attachment(0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     subpass.preserve_attachment(1); // Normal
@@ -749,12 +759,22 @@ void Renderer::create_render_pass() {
   dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
   dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
   dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-  dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+  dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
   dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
   builder.subpass_dependency(dependency);
 
   dependency.srcSubpass = 1;
+  dependency.dstSubpass = 2;
+  dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+  dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+  dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+  dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+  dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+  builder.subpass_dependency(dependency);
+
+  dependency.srcSubpass = 2;
   dependency.dstSubpass = VK_SUBPASS_EXTERNAL;
   dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
   dependency.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
@@ -909,7 +929,7 @@ void Renderer::create_pipeline() {
     VK_DYNAMIC_STATE_SCISSOR
   });
 
-  gui_pipeline_ = gui_pipeline_builder.build(*device_, gui_pipeline_layout_, gbuffer_render_pass_, 1);
+  gui_pipeline_ = gui_pipeline_builder.build(*device_, gui_pipeline_layout_, gbuffer_render_pass_, 2);
 }
 
 void Renderer::create_synchronization_primitives() {
