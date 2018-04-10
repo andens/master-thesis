@@ -676,9 +676,9 @@ void Renderer::create_swapchain() {
 void Renderer::create_command_pools_and_buffers() {
   stable_graphics_cmd_pool_ = vk::CommandPool::make_stable(device_->graphics_family(), device_);
   graphics_cmd_buf_ = stable_graphics_cmd_pool_->allocate_primary();
-  //indirect_cmd_buf_ = stable_graphics_cmd_pool_->allocate_secondary();
 
   transient_graphics_cmd_pool_ = vk::CommandPool::make_transient(device_->graphics_family(), device_);
+  dgc_cmd_buf_ = transient_graphics_cmd_pool_->allocate_secondary();
   blit_swapchain_cmd_buf_ = transient_graphics_cmd_pool_->allocate_primary();
 }
 
@@ -1546,7 +1546,7 @@ void Renderer::create_dgc_resources() {
   create_object_table();
   register_objects_in_table();
   create_indirect_commands_layout();
-  //reserve_space_for_indirect_commands();
+  reserve_space_for_indirect_commands();
 
   dgc_pipeline_parameters_.reset(new vk::Buffer { *device_, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, max_draw_calls_ * sizeof(uint32_t) });
 
@@ -1690,12 +1690,16 @@ void Renderer::create_indirect_commands_layout() {
   }
 }
 
-/*
 void Renderer::reserve_space_for_indirect_commands() {
   VkCommandBufferInheritanceInfo inheritance_info {};
   inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
   inheritance_info.pNext = nullptr;
-  inheritance_info. // Do stuff here
+  inheritance_info.renderPass = gbuffer_render_pass_;
+  inheritance_info.subpass = 1;
+  inheritance_info.framebuffer = framebuffer_;
+  inheritance_info.occlusionQueryEnable = VK_FALSE;
+  inheritance_info.queryFlags = 0;
+  inheritance_info.pipelineStatistics = 0;
 
   VkCommandBufferBeginInfo cmd_buf_info {};
   cmd_buf_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1709,7 +1713,7 @@ void Renderer::reserve_space_for_indirect_commands() {
   cmd_buf_info.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
   cmd_buf_info.pInheritanceInfo = &inheritance_info;
 
-  indirect_cmd_buf_->vkBeginCommandBuffer(&cmd_buf_info);
+  dgc_cmd_buf_->vkBeginCommandBuffer(&cmd_buf_info);
 
   VkCmdReserveSpaceForCommandsInfoNVX reserve_info {};
   reserve_info.sType = VK_STRUCTURE_TYPE_CMD_RESERVE_SPACE_FOR_COMMANDS_INFO_NVX;
@@ -1720,14 +1724,19 @@ void Renderer::reserve_space_for_indirect_commands() {
   // need to allocate memory up-front. This call is done on the CPU, but memory
   // does indeed live on the GPU according to Christoph Kubisch. The number of
   // sequences is an upper limit on how many times the indirect commands layout
-  // will be stamped out, I belive.
-  reserve_info.maxSequencesCount = 1;
+  // will be stamped out, I believe.
+  reserve_info.maxSequencesCount = max_draw_calls_;
 
-  indirect_cmd_buf_->vkCmdReserveSpaceForCommandsNVX(&reserve_info);
+  // Must be called in a render pass...
+  dgc_cmd_buf_->vkCmdReserveSpaceForCommandsNVX(&reserve_info);
 
-  indirect_cmd_buf_->vkEndCommandBuffer();
+  dgc_cmd_buf_->vkEndCommandBuffer();
+
+  // Note: Execution is done the first time in my primary command buffer.
+  // Why oh why does this have to be called in a render pass? It is already
+  // a secondary command buffer, meaning I can't execute it by itself so I
+  // already need a primary buffer to drive it... sigh
 }
-*/
 
 void Renderer::create_timing_resources() {
   VkQueryPoolCreateInfo pool_info {};
