@@ -159,7 +159,7 @@ void Renderer::render() {
 
   graphics_cmd_buf_->vkBeginCommandBuffer(&begin_info);
 
-  graphics_cmd_buf_->vkCmdResetQueryPool(query_pool_, 0, 2);
+  graphics_cmd_buf_->vkCmdResetQueryPool(query_pool_, 0, 4);
   graphics_cmd_buf_->vkCmdWriteTimestamp(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query_pool_, 0); // All previous commands must have executed until the end
 
   // Clear values for G-buffer attachments as indicated by the subpass
@@ -259,6 +259,8 @@ void Renderer::render() {
     // expect to render the maximum objects at all times.
     assert(current_total_draw_calls_ == max_draw_calls_);
 
+    graphics_cmd_buf_->vkCmdWriteTimestamp(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query_pool_, 2); // All previous commands must have executed until the end
+
     // References to the input data for each token command.
     std::array<VkIndirectCommandsTokenNVX, 3> input_tokens {};
     input_tokens[0].tokenType = VK_INDIRECT_COMMANDS_TOKEN_TYPE_PIPELINE_NVX;
@@ -291,6 +293,8 @@ void Renderer::render() {
     if (current_total_draw_calls_ > 0) {
       graphics_cmd_buf_->vkCmdProcessCommandsNVX(&commands_info);
     }
+
+    graphics_cmd_buf_->vkCmdWriteTimestamp(VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT, query_pool_, 3);
 
     break;
   }
@@ -398,6 +402,13 @@ void Renderer::render() {
   // timestampPeriod: nanoseconds per tick
   // division: nanoseconds to milli
   gpu_render_time_ = static_cast<double>(query_data[1] - query_data[0]) * physical_device_properties_.limits.timestampPeriod / 1000000.0;
+  if (render_strategy_ == RenderStrategy::DGC) {
+    query_result = device_->vkGetQueryPoolResults(query_pool_, 2, 2, sizeof(query_data), query_data, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+    dgc_generation_time_ = static_cast<double>(query_data[1] - query_data[0]) * physical_device_properties_.limits.timestampPeriod / 1000000.0;
+  }
+  else {
+    dgc_generation_time_ = 0.0;
+  }
 
   // Now that the frame has been processed, we iterate all jobs again to get an
   // idea of the traversal overhead each technique suffers.
@@ -576,6 +587,10 @@ double Renderer::measured_time() const {
 
 double Renderer::gpu_time() const {
   return gpu_render_time_;
+}
+
+double Renderer::dgc_generation_time() const {
+  return dgc_generation_time_;
 }
 
 double Renderer::render_jobs_traversal_time() const {
@@ -1720,7 +1735,7 @@ void Renderer::create_timing_resources() {
   pool_info.pNext = nullptr;
   pool_info.flags = 0;
   pool_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
-  pool_info.queryCount = 2;
+  pool_info.queryCount = 4;
   pool_info.pipelineStatistics = 0;
 
   VkResult result = device_->vkCreateQueryPool(&pool_info, nullptr, &query_pool_);

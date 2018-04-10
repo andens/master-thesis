@@ -62,6 +62,10 @@ public:
   // between total time and GPU time, provided that the GPU does not start
   // processing until the CPU work is completely done.
   double gpu_time() const;
+  // Returns the time it takes DGC to patch the command buffer on the GPU.
+  // This time is part of the overhead of that strategy and should not be
+  // ignored in the total GPU time.
+  double dgc_generation_time() const;
   // Returns the time spent traversing the render jobs data structure. This is
   // overhead that is present for each technique and can be subtracted to get
   // an idea of how the render strategy itself performs.
@@ -194,6 +198,7 @@ private:
 
   double measured_time_ { 0.0 };
   double gpu_render_time_ { 0.0 };
+  double dgc_generation_time_ { 0.0 };
   double render_jobs_traversal_time_ { 0.0 };
 
   bool measure_session_active_ { false };
