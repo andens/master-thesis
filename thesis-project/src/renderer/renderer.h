@@ -72,6 +72,7 @@ public:
   double render_jobs_traversal_time() const;
 
   void use_render_strategy(RenderStrategy strategy);
+  RenderStrategy current_strategy() const;
 
 private:
   struct Vertex {

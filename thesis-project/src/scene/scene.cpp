@@ -1,6 +1,7 @@
 #include "scene.h"
 
 #include <algorithm>
+#include <array>
 #include <imgui.h>
 #include "../renderer/renderer.h"
 #include "../render-cache/render-cache.h"
@@ -49,7 +50,7 @@ void Scene::update(float delta_time, Renderer& renderer) {
   }
   */
 
-  if (ImGui::Begin("Controls")) {
+  if (ImGui::Begin("Monitor")) {
     if (ImGui::CollapsingHeader("Render time", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
       ImVec2 plot_extent { ImGui::GetContentRegionAvailWidth() - 70, 100 };
       ImGui::PlotLines("", [](void* data, int idx) -> float {
@@ -60,6 +61,33 @@ void Scene::update(float delta_time, Renderer& renderer) {
       ImGui::SameLine();
 
       ImGui::Text("%-3.4f ms", largest_history_entry_);
+    }
+  }
+  ImGui::End();
+
+  if (ImGui::Begin("Controls")) {
+    typedef std::pair<char const*, Renderer::RenderStrategy> Strategy;
+    std::array<Strategy, 3> strategies {
+      std::make_pair("Regular", Renderer::RenderStrategy::Regular),
+      std::make_pair("MDI", Renderer::RenderStrategy::MDI),
+      std::make_pair("DGC", Renderer::RenderStrategy::DGC),
+    };
+
+    auto strategy = std::find_if(strategies.begin(), strategies.end(), [&renderer](Strategy const& s) -> bool {
+      return renderer.current_strategy() == s.second;
+    });
+
+    if (ImGui::BeginCombo("Strategy", strategy->first, 0)) {
+      std::for_each(strategies.begin(), strategies.end(), [&renderer](Strategy const& s) {
+        bool selected = renderer.current_strategy() == s.second;
+        if (ImGui::Selectable(s.first, &selected, 0)) {
+          renderer.use_render_strategy(s.second);
+        }
+        if (selected) {
+          ImGui::SetItemDefaultFocus();
+        }
+      });
+      ImGui::EndCombo();
     }
   }
   ImGui::End();

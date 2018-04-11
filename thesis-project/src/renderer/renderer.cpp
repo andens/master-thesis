@@ -636,6 +636,10 @@ void Renderer::use_render_strategy(RenderStrategy strategy) {
   render_strategy_ = strategy;
 }
 
+Renderer::RenderStrategy Renderer::current_strategy() const {
+  return render_strategy_;
+}
+
 void Renderer::create_debug_callback() {
   VkDebugReportCallbackCreateInfoEXT callback_info {};
   callback_info.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
