@@ -26,4 +26,5 @@ private:
   float largest_history_entry_ { 0.0f };
 
   int pipeline_switches_ { 1 };
+  int update_ratio_ { 0 };
 };

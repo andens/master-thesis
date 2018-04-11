@@ -73,13 +73,15 @@ void Scene::update(float delta_time, Renderer& renderer) {
       std::make_pair("DGC", Renderer::RenderStrategy::DGC),
     };
 
-    auto strategy = std::find_if(strategies.begin(), strategies.end(), [&renderer](Strategy const& s) -> bool {
-      return renderer.current_strategy() == s.second;
+    Renderer::RenderStrategy current_strategy = renderer.current_strategy();
+
+    auto strategy = std::find_if(strategies.begin(), strategies.end(), [current_strategy](Strategy const& s) -> bool {
+      return current_strategy == s.second;
     });
 
     if (ImGui::BeginCombo("Strategy", strategy->first, 0)) {
-      std::for_each(strategies.begin(), strategies.end(), [&renderer](Strategy const& s) {
-        bool selected = renderer.current_strategy() == s.second;
+      std::for_each(strategies.begin(), strategies.end(), [current_strategy, &renderer](Strategy const& s) {
+        bool selected = current_strategy == s.second;
         if (ImGui::Selectable(s.first, &selected, 0)) {
           renderer.use_render_strategy(s.second);
         }
@@ -111,8 +113,35 @@ void Scene::update(float delta_time, Renderer& renderer) {
         ImGui::SetTooltip("How many pipelines to set during a frame. One\npipeline renders everything the same way, and\nmax switches pipeline for every draw call.");
       }
     }
+
+    // Number of updated jobs per frame
+    {
+      ImGui::AlignFirstTextHeightToWidgets();
+      char const* left_label = "Update";
+      ImGui::Text(left_label);
+      ImGui::SameLine();
+      ImGui::PushItemWidth(100.0f);
+      if (ImGui::SliderInt("##update_ratio", &update_ratio_, 0, 100, "%.0f%%"));
+      ImGui::PopItemWidth();
+      ImGui::SameLine();
+      ImGui::Text("of jobs each frame");
+      ImGui::SameLine();
+      ImGui::Text("(?)");
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Frequency of incremental changes during a frame.\nFor MDI and DGC, this is how many draw calls are\nrecorded during the frame. Regular is unaffected\nby this value as everything is always recorded.");
+      }
+      ImGui::SameLine();
+      ImGui::Text("(%u / %u).", max_draw_calls_ / 100 * update_ratio_, max_draw_calls_);
+    }
   }
   ImGui::End();
+
+  renderer.borrow_render_cache([this](RenderCache& cache) {
+    uint32_t dirty_count = max_draw_calls_ / 100 * update_ratio_;
+    for (uint32_t i = 0; i < dirty_count; ++i) {
+      cache.dirtify(i);
+    }
+  });
 }
 
 Scene::Scene(Renderer& renderer) {
