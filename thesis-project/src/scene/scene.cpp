@@ -93,17 +93,23 @@ void Scene::update(float delta_time, Renderer& renderer) {
     // Pipeline switch frequency
     {
       ImGui::AlignFirstTextHeightToWidgets();
-      char const* left_label = "Switch pipeline every";
+      char const* left_label = "Set pipeline";
       ImGui::PushItemWidth(ImGui::CalcTextSize(left_label).x);
       ImGui::Text(left_label);
       ImGui::PopItemWidth();
       ImGui::SameLine();
       ImGui::PushItemWidth(70.0f);
-      if (ImGui::SliderInt("##batch size", &batch_size_, 1, max_draw_calls_)) {
+      if (ImGui::SliderInt("##pipeline switches", &pipeline_switches_, 1, max_draw_calls_)) {
+        modify_pipeline_switch_frequency(renderer);
       }
       ImGui::PopItemWidth();
       ImGui::SameLine();
-      ImGui::Text("objects");
+      ImGui::Text("time(s)");
+      ImGui::SameLine();
+      ImGui::Text("(?)");
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("How many pipelines to set during a frame. One\npipeline renders everything the same way, and\nmax switches pipeline for every draw call.");
+      }
     }
   }
   ImGui::End();
@@ -124,4 +130,38 @@ Scene::Scene(Renderer& renderer) {
   for (uint32_t i = 0; i < entries; ++i) {
     render_time_history_.push_back(0.0f);
   }
+}
+
+void Scene::modify_pipeline_switch_frequency(Renderer& r) {
+  r.borrow_render_cache([this](RenderCache& cache) {
+    // The number of pipeline switches is the number of groups to partition the
+    // calls in (each group uses one pipeline). The partitioning do not always
+    // end up in equi-sized groups. Modulo tells us how many groups should have
+    // an extra job (none in case the division evens out). I put these groups
+    // at the end.
+
+    RenderCache::Pipeline use_pipeline = RenderCache::Pipeline::Alpha;
+    RenderCache::Pipeline switch_pipeline = RenderCache::Pipeline::Beta;
+
+    uint32_t batch_size = max_draw_calls_ / pipeline_switches_;
+    uint32_t groups_with_extra_job = max_draw_calls_ % pipeline_switches_;
+
+    uint32_t objects_since_switch = 0;
+    uint32_t groups_processed = 0;
+    for (uint32_t i = 0; i < max_draw_calls_; ++i) {
+      cache.modify_pipeline(i, use_pipeline);
+
+      ++objects_since_switch;
+
+      if (objects_since_switch == batch_size) {
+        objects_since_switch = 0;
+        groups_processed++;
+        std::swap(use_pipeline, switch_pipeline);
+
+        if (groups_processed == pipeline_switches_ - groups_with_extra_job) {
+          batch_size++;
+        }
+      }
+    }
+  });
 }

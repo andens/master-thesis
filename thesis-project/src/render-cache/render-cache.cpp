@@ -22,6 +22,14 @@ void RenderCache::stop_rendering(uint32_t job) {
 }
 */
 
+void RenderCache::modify_pipeline(uint32_t job, Pipeline pipeline) {
+  auto& j = jobs_[job];
+  if (j.pipeline != pipeline) {
+    j.change = Change::Modify;
+    j.pipeline = pipeline;
+  }
+}
+
 void RenderCache::dirtify(uint32_t job) {
   jobs_[job].change = Change::Modify;
 }

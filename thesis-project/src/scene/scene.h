@@ -11,6 +11,9 @@ public:
   Scene(Renderer& renderer);
 
 private:
+  void modify_pipeline_switch_frequency(Renderer& r);
+
+private:
   const uint32_t max_draw_calls_ { 100000 };
 
   double accumulated_render_time_ { 0.0 };
@@ -22,5 +25,5 @@ private:
   const float history_time_span_ { 60.0f }; // Seconds of history shown
   float largest_history_entry_ { 0.0f };
 
-  int batch_size_ { static_cast<int>(max_draw_calls_) };
+  int pipeline_switches_ { 1 };
 };

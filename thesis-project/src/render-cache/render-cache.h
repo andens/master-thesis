@@ -40,6 +40,7 @@ public:
   //void start_rendering(uint32_t job, RenderObject object_type, Pipeline pipeline); 
   //void stop_rendering(uint32_t job);
 
+  void modify_pipeline(uint32_t job, Pipeline pipeline);
   void dirtify(uint32_t job);
   void dirtify_all();
 
