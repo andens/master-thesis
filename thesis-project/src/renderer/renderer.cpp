@@ -634,6 +634,7 @@ double Renderer::render_jobs_traversal_time() const {
 
 void Renderer::use_render_strategy(RenderStrategy strategy) {
   render_strategy_ = strategy;
+  render_cache_->dirtify_all();
 }
 
 Renderer::RenderStrategy Renderer::current_strategy() const {

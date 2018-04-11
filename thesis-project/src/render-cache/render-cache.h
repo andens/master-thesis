@@ -41,6 +41,7 @@ public:
   //void stop_rendering(uint32_t job);
 
   void dirtify(uint32_t job);
+  void dirtify_all();
 
   // Enumerate all jobs, calling the user-provided |it| function on them.
   // Changes are consumes in the process.

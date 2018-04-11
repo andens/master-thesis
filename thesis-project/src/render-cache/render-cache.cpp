@@ -26,6 +26,12 @@ void RenderCache::dirtify(uint32_t job) {
   jobs_[job].change = Change::Modify;
 }
 
+void RenderCache::dirtify_all() {
+  for (uint32_t i = 0; i < max_draw_calls_; ++i) {
+    dirtify(i);
+  }
+}
+
 void RenderCache::enumerate_all(std::function<void*(JobContext const&)> const& it) {
   std::for_each(jobs_.begin(), jobs_.end(), [&it](JobContext& context) {
     auto user_data = it(context);
