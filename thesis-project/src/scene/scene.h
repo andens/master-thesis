@@ -11,6 +11,8 @@ public:
   Scene(Renderer& renderer);
 
 private:
+  const uint32_t max_draw_calls_ { 100000 };
+
   double accumulated_render_time_ { 0.0 };
   uint32_t accumulated_frames_ { 0 };
   float accumulation_timer_ { 0.0f };
@@ -19,4 +21,6 @@ private:
   std::deque<float> render_time_history_;
   const float history_time_span_ { 60.0f }; // Seconds of history shown
   float largest_history_entry_ { 0.0f };
+
+  int batch_size_ { static_cast<int>(max_draw_calls_) };
 };

@@ -89,6 +89,22 @@ void Scene::update(float delta_time, Renderer& renderer) {
       });
       ImGui::EndCombo();
     }
+
+    // Pipeline switch frequency
+    {
+      ImGui::AlignFirstTextHeightToWidgets();
+      char const* left_label = "Switch pipeline every";
+      ImGui::PushItemWidth(ImGui::CalcTextSize(left_label).x);
+      ImGui::Text(left_label);
+      ImGui::PopItemWidth();
+      ImGui::SameLine();
+      ImGui::PushItemWidth(70.0f);
+      if (ImGui::SliderInt("##batch size", &batch_size_, 1, max_draw_calls_)) {
+      }
+      ImGui::PopItemWidth();
+      ImGui::SameLine();
+      ImGui::Text("objects");
+    }
   }
   ImGui::End();
 }
