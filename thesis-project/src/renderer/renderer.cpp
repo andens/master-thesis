@@ -240,7 +240,7 @@ void Renderer::render() {
         graphics_cmd_buf_->vkCmdDrawIndirect(indirect_buffer_->vulkan_buffer_handle(), last_switched_job * sizeof(VkDrawIndirectCommand), job - last_switched_job, sizeof(VkDrawIndirectCommand));
         last_switched_job = job;
       }
-    });
+    }, false);
     break;
   }
   case RenderStrategy::DGC: {
@@ -250,7 +250,7 @@ void Renderer::render() {
     // an implicit sync between generation and execution, thus preventing me
     // from timing just the generation. Execution is done in the next subpass.
 
-    update_indirect_buffer([](uint32_t, VkPipeline) {});
+    update_indirect_buffer([](uint32_t, VkPipeline) {}, true);
 
     // Before generating commands we must allocate space in the target command
     // buffer. This must be done in a render pass (reuse the current one with
@@ -1172,10 +1172,10 @@ void Renderer::create_indirect_buffer() {
 
 #pragma push_macro("max")
 #undef max
-void Renderer::update_indirect_buffer(std::function<void(uint32_t job, VkPipeline pipeline)> const& pipeline_switch) {
+void Renderer::update_indirect_buffer(std::function<void(uint32_t job, VkPipeline pipeline)> const& pipeline_switch, bool dgc) {
   RenderCache::Pipeline current_pipeline = RenderCache::Pipeline::Alpha;
 
-  render_cache_->enumerate_all([this, &current_pipeline, &pipeline_switch](RenderCache::JobContext const& job_context) -> void* {
+  render_cache_->enumerate_all([this, &current_pipeline, &pipeline_switch, dgc](RenderCache::JobContext const& job_context) -> void* {
     if (current_pipeline != job_context.pipeline) {
       pipeline_switch(job_context.job, current_pipeline == RenderCache::Pipeline::Alpha ? pipeline_regular_mdi_solid_ : pipeline_regular_mdi_wireframe_);
     }
@@ -1196,12 +1196,14 @@ void Renderer::update_indirect_buffer(std::function<void(uint32_t job, VkPipelin
     indirect_command->firstVertex = job_context.object_type == RenderObject::Box ? 0 : 36;
     indirect_command->firstInstance = job_context.job;
 
-    uint32_t* pipeline = mapped_dgc_pipeline_parameters_ + indirect_buffer_element;
-    *pipeline = job_context.pipeline == RenderCache::Pipeline::Alpha ? 0 : 1;
+    if (dgc) {
+      uint32_t* pipeline = mapped_dgc_pipeline_parameters_ + indirect_buffer_element;
+      *pipeline = job_context.pipeline == RenderCache::Pipeline::Alpha ? 0 : 1;
 
-    Push* push = mapped_dgc_push_constants_ + indirect_buffer_element;
-    push->table_entry = 0;
-    push->actual_data = job_context.job;
+      Push* push = mapped_dgc_push_constants_ + indirect_buffer_element;
+      push->table_entry = 0;
+      push->actual_data = job_context.job;
+    }
 
     std::array<VkMappedMemoryRange, 3> flush_ranges {};
     flush_ranges[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -1209,17 +1211,21 @@ void Renderer::update_indirect_buffer(std::function<void(uint32_t job, VkPipelin
     flush_ranges[0].memory = indirect_buffer_->vulkan_memory_handle();
     flush_ranges[0].offset = indirect_buffer_element * sizeof(VkDrawIndirectCommand);
     flush_ranges[0].size = sizeof(VkDrawIndirectCommand);
-    flush_ranges[1].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-    flush_ranges[1].pNext = nullptr;
-    flush_ranges[1].memory = dgc_pipeline_parameters_->vulkan_memory_handle();
-    flush_ranges[1].offset = indirect_buffer_element * sizeof(uint32_t);
-    flush_ranges[1].size = sizeof(uint32_t);
-    flush_ranges[2].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-    flush_ranges[2].pNext = nullptr;
-    flush_ranges[2].memory = dgc_push_constants_->vulkan_memory_handle();
-    flush_ranges[2].offset = indirect_buffer_element * sizeof(Push);
-    flush_ranges[2].size = sizeof(Push);
-    device_->vkFlushMappedMemoryRanges(static_cast<uint32_t>(flush_ranges.size()), flush_ranges.data());
+
+    if (dgc) {
+      flush_ranges[1].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+      flush_ranges[1].pNext = nullptr;
+      flush_ranges[1].memory = dgc_pipeline_parameters_->vulkan_memory_handle();
+      flush_ranges[1].offset = indirect_buffer_element * sizeof(uint32_t);
+      flush_ranges[1].size = sizeof(uint32_t);
+      flush_ranges[2].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+      flush_ranges[2].pNext = nullptr;
+      flush_ranges[2].memory = dgc_push_constants_->vulkan_memory_handle();
+      flush_ranges[2].offset = indirect_buffer_element * sizeof(Push);
+      flush_ranges[2].size = sizeof(Push);
+    }
+    
+    device_->vkFlushMappedMemoryRanges(dgc ? 3 : 1, flush_ranges.data());
 
     return reinterpret_cast<void*>(indirect_buffer_element);
   });

@@ -100,7 +100,7 @@ private:
   void interleave_vertex_data(Mesh* mesh, std::vector<Vertex>& vertices);
   void create_descriptor_sets();
   void create_indirect_buffer();
-  void update_indirect_buffer(std::function<void(uint32_t job, VkPipeline pipeline)> const& pipeline_switch);
+  void update_indirect_buffer(std::function<void(uint32_t job, VkPipeline pipeline)> const& pipeline_switch, bool dgc);
   void initialize_imgui();
   void create_imgui_font_texture();
   void update_gui_vertex_data(ImDrawData* draw_data);
