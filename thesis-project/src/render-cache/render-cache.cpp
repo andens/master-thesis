@@ -67,7 +67,7 @@ void RenderCache::clear() {
   for (uint32_t i = 0; i < max_draw_calls_; ++i) {
     JobContext context;
     context.job = i;
-    context.object_type = RenderObject::Box;
+    context.object_type = i % 2 == 0 ? RenderObject::Sphere : RenderObject::Box;
     context.pipeline = Pipeline::Alpha;
     context.change = Change::Modify; // To write indirect buffers on first access
     context.user_data = nullptr;
