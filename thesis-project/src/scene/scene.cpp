@@ -66,75 +66,87 @@ void Scene::update(float delta_time, Renderer& renderer) {
   ImGui::End();
 
   if (ImGui::Begin("Controls")) {
-    typedef std::pair<char const*, Renderer::RenderStrategy> Strategy;
-    std::array<Strategy, 3> strategies {
-      std::make_pair("Regular", Renderer::RenderStrategy::Regular),
-      std::make_pair("MDI", Renderer::RenderStrategy::MDI),
-      std::make_pair("DGC", Renderer::RenderStrategy::DGC),
-    };
+    if (measuring_) {
+      ImGui::Text("Measuring in progress - please hold. Frame %u of %u.", measure_current_frame_, measure_frame_span_);
+    }
+    else {
+      typedef std::pair<char const*, Renderer::RenderStrategy> Strategy;
+      std::array<Strategy, 3> strategies {
+        std::make_pair("Regular", Renderer::RenderStrategy::Regular),
+        std::make_pair("MDI", Renderer::RenderStrategy::MDI),
+        std::make_pair("DGC", Renderer::RenderStrategy::DGC),
+      };
 
-    Renderer::RenderStrategy current_strategy = renderer.current_strategy();
+      Renderer::RenderStrategy current_strategy = renderer.current_strategy();
 
-    auto strategy = std::find_if(strategies.begin(), strategies.end(), [current_strategy](Strategy const& s) -> bool {
-      return current_strategy == s.second;
-    });
-
-    if (ImGui::BeginCombo("Strategy", strategy->first, 0)) {
-      std::for_each(strategies.begin(), strategies.end(), [current_strategy, &renderer](Strategy const& s) {
-        bool selected = current_strategy == s.second;
-        if (ImGui::Selectable(s.first, &selected, 0)) {
-          renderer.use_render_strategy(s.second);
-        }
-        if (selected) {
-          ImGui::SetItemDefaultFocus();
-        }
+      auto strategy = std::find_if(strategies.begin(), strategies.end(), [current_strategy](Strategy const& s) -> bool {
+        return current_strategy == s.second;
       });
-      ImGui::EndCombo();
-    }
 
-    // Pipeline switch frequency
-    {
-      ImGui::AlignFirstTextHeightToWidgets();
-      char const* left_label = "Set pipeline";
-      ImGui::PushItemWidth(ImGui::CalcTextSize(left_label).x);
-      ImGui::Text(left_label);
-      ImGui::PopItemWidth();
-      ImGui::SameLine();
-      ImGui::PushItemWidth(70.0f);
-      if (ImGui::DragInt("##pipeline switches", &pipeline_switches_, 100.0f, 1, max_draw_calls_)) {
-        if (pipeline_switches_ % 100 == 1 && pipeline_switches_ != 1) {
-          pipeline_switches_--;
+      if (ImGui::BeginCombo("Strategy", strategy->first, 0)) {
+        std::for_each(strategies.begin(), strategies.end(), [current_strategy, &renderer](Strategy const& s) {
+          bool selected = current_strategy == s.second;
+          if (ImGui::Selectable(s.first, &selected, 0)) {
+            renderer.use_render_strategy(s.second);
+          }
+          if (selected) {
+            ImGui::SetItemDefaultFocus();
+          }
+        });
+        ImGui::EndCombo();
+      }
+
+      // Pipeline switch frequency
+      {
+        ImGui::AlignFirstTextHeightToWidgets();
+        char const* left_label = "Set pipeline";
+        ImGui::PushItemWidth(ImGui::CalcTextSize(left_label).x);
+        ImGui::Text(left_label);
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+        ImGui::PushItemWidth(70.0f);
+        if (ImGui::DragInt("##pipeline switches", &pipeline_switches_, 100.0f, 1, max_draw_calls_)) {
+          if (pipeline_switches_ % 100 == 1 && pipeline_switches_ != 1) {
+            pipeline_switches_--;
+          }
+          modify_pipeline_switch_frequency(renderer);
         }
-        modify_pipeline_switch_frequency(renderer);
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+        ImGui::Text("time(s)");
+        ImGui::SameLine();
+        ImGui::Text("(?)");
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("How many pipelines to set during a frame. One\npipeline renders everything the same way, and\nmax switches pipeline for every draw call.");
+        }
       }
-      ImGui::PopItemWidth();
-      ImGui::SameLine();
-      ImGui::Text("time(s)");
-      ImGui::SameLine();
-      ImGui::Text("(?)");
-      if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("How many pipelines to set during a frame. One\npipeline renders everything the same way, and\nmax switches pipeline for every draw call.");
-      }
-    }
 
-    // Number of updated jobs per frame
-    {
-      ImGui::AlignFirstTextHeightToWidgets();
-      char const* left_label = "Update";
-      ImGui::Text(left_label);
-      ImGui::SameLine();
-      ImGui::PushItemWidth(100.0f);
-      if (ImGui::SliderInt("##update_ratio", &update_ratio_, 0, 100, "%.0f%%"));
-      ImGui::PopItemWidth();
-      ImGui::SameLine();
-      ImGui::Text("of jobs each frame");
-      ImGui::SameLine();
-      ImGui::Text("(?)");
-      if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("Frequency of incremental changes during a frame.\nFor MDI and DGC, this is how many draw calls are\nrecorded during the frame. Regular is unaffected\nby this value as everything is always recorded.");
+      // Number of updated jobs per frame
+      {
+        ImGui::AlignFirstTextHeightToWidgets();
+        char const* left_label = "Update";
+        ImGui::Text(left_label);
+        ImGui::SameLine();
+        ImGui::PushItemWidth(100.0f);
+        if (ImGui::SliderInt("##update_ratio", &update_ratio_, 0, 100, "%.0f%%"));
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+        ImGui::Text("of jobs each frame");
+        ImGui::SameLine();
+        ImGui::Text("(?)");
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("Frequency of incremental changes during a frame.\nFor MDI and DGC, this is how many draw calls are\nrecorded during the frame. Regular is unaffected\nby this value as everything is always recorded.");
+        }
+        ImGui::SameLine();
+        ImGui::Text("(%u / %u).", max_draw_calls_ / 100 * update_ratio_, max_draw_calls_);
       }
-      ImGui::SameLine();
-      ImGui::Text("(%u / %u).", max_draw_calls_ / 100 * update_ratio_, max_draw_calls_);
+
+      // Start measuring session
+      {
+        if (ImGui::Button("Measure")) {
+          measuring_ = true;
+        }
+      }
     }
   }
   ImGui::End();

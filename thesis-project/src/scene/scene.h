@@ -27,4 +27,8 @@ private:
 
   int pipeline_switches_ { 1 };
   int update_ratio_ { 0 };
+
+  bool measuring_ { false };
+  uint32_t measure_current_frame_ { 1 };
+  const uint32_t measure_frame_span_ { 100 };
 };
