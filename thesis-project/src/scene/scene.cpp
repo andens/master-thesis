@@ -158,6 +158,8 @@ void Scene::update(float delta_time, Renderer& renderer) {
 
       ImGui::Text("Max: %-3.4f ms", largest_history_entry_);
       ImGui::Text("Latest: %-3.4f ms", monitor_value_(render_time_history_.back()));
+      ImGui::NewLine();
+      ImGui::Text("Saved sessions: %u", static_cast<uint32_t>(sessions_.size()));
     }
   }
   ImGui::End();
