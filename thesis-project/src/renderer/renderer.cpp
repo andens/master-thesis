@@ -214,22 +214,15 @@ void Renderer::render() {
 
   switch (render_strategy_) {
   case RenderStrategy::Regular: {
-    // Alpha
+    RenderCache::Pipeline current_pipeline = RenderCache::Pipeline::Alpha;
     graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_regular_mdi_solid_);
-    render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
-      if (job_context.pipeline == RenderCache::Pipeline::Alpha) {
-        //graphics_cmd_buf_->vkCmdDraw(job_context.object_type == RenderObject::Box ? 36 : 2160, 1, job_context.object_type == RenderObject::Box ? 0 : 36, job_context.job);
-        graphics_cmd_buf_->vkCmdDraw(3, 1, job_context.object_type == RenderObject::Box ? 2196 : 2199, job_context.job);
+    render_cache_->enumerate_all([this, &current_pipeline](RenderCache::JobContext const& job_context) -> void* {
+      //graphics_cmd_buf_->vkCmdDraw(job_context.object_type == RenderObject::Box ? 36 : 2160, 1, job_context.object_type == RenderObject::Box ? 0 : 36, job_context.job);
+      if (current_pipeline != job_context.pipeline) {
+        graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, job_context.pipeline == RenderCache::Pipeline::Alpha ? pipeline_regular_mdi_solid_ : pipeline_regular_mdi_wireframe_);
+        current_pipeline = job_context.pipeline;
       }
-      return job_context.user_data;
-    });
-    // Beta
-    graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_regular_mdi_wireframe_);
-    render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
-      if (job_context.pipeline == RenderCache::Pipeline::Beta) {
-        //graphics_cmd_buf_->vkCmdDraw(job_context.object_type == RenderObject::Box ? 36 : 2160, 1, job_context.object_type == RenderObject::Box ? 0 : 36, job_context.job);
-        graphics_cmd_buf_->vkCmdDraw(3, 1, job_context.object_type == RenderObject::Box ? 2196 : 2199, job_context.job);
-      }
+      graphics_cmd_buf_->vkCmdDraw(3, 1, job_context.object_type == RenderObject::Box ? 2196 : 2199, job_context.job);
       return job_context.user_data;
     });
     break;
