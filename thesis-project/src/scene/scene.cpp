@@ -272,7 +272,7 @@ Scene::Scene(Renderer& renderer) {
     render_time_history_.push_back(timings);
   }
 
-  config_setter_.reset(new ConfigSetter);
+  config_setter_.reset(new ConfigSetter { max_draw_calls_ });
 }
 
 Scene::~Scene() = default;
