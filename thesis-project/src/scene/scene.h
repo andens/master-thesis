@@ -11,19 +11,27 @@ public:
   Scene(Renderer& renderer);
 
 private:
+  struct FrameTimings {
+    double total;
+    double gpu;
+    double dgc_generation;
+    double traversal;
+  };
+
+private:
   void modify_pipeline_switch_frequency(Renderer& r);
 
 private:
   const uint32_t max_draw_calls_ { 100000 };
 
-  double accumulated_render_time_ { 0.0 };
+  FrameTimings accumulated_timings_ {};
   uint32_t accumulated_frames_ { 0 };
   float accumulation_timer_ { 0.0f };
   const float time_per_accumulation_ { 0.1f };
 
-  std::deque<float> render_time_history_;
+  std::deque<FrameTimings> render_time_history_;
   const float history_time_span_ { 30.0f }; // Seconds of history shown
-  float largest_history_entry_ { 0.0f };
+  //float largest_history_entry_ { 0.0f };
 
   int pipeline_switches_ { 1 };
   int update_ratio_ { 0 };
