@@ -101,7 +101,10 @@ void Scene::update(float delta_time, Renderer& renderer) {
       ImGui::PopItemWidth();
       ImGui::SameLine();
       ImGui::PushItemWidth(70.0f);
-      if (ImGui::SliderInt("##pipeline switches", &pipeline_switches_, 1, max_draw_calls_)) {
+      if (ImGui::DragInt("##pipeline switches", &pipeline_switches_, 100.0f, 1, max_draw_calls_)) {
+        if (pipeline_switches_ % 100 == 1 && pipeline_switches_ != 1) {
+          pipeline_switches_--;
+        }
         modify_pipeline_switch_frequency(renderer);
       }
       ImGui::PopItemWidth();
