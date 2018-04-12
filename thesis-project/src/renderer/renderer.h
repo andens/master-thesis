@@ -98,6 +98,7 @@ private:
   void create_vertex_buffer();
   void generate_box_vertices(std::vector<Vertex>& vertices);
   void load_sphere(std::vector<Vertex>& vertices);
+  void generate_triangles(std::vector<Vertex>& vertices);
   void interleave_vertex_data(Mesh* mesh, std::vector<Vertex>& vertices);
   void create_descriptor_sets();
   void create_indirect_buffer();

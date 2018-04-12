@@ -218,7 +218,8 @@ void Renderer::render() {
     graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_regular_mdi_solid_);
     render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
       if (job_context.pipeline == RenderCache::Pipeline::Alpha) {
-        graphics_cmd_buf_->vkCmdDraw(job_context.object_type == RenderObject::Box ? 36 : 2160, 1, job_context.object_type == RenderObject::Box ? 0 : 36, job_context.job);
+        //graphics_cmd_buf_->vkCmdDraw(job_context.object_type == RenderObject::Box ? 36 : 2160, 1, job_context.object_type == RenderObject::Box ? 0 : 36, job_context.job);
+        graphics_cmd_buf_->vkCmdDraw(3, 1, job_context.object_type == RenderObject::Box ? 2196 : 2199, job_context.job);
       }
       return job_context.user_data;
     });
@@ -226,7 +227,8 @@ void Renderer::render() {
     graphics_cmd_buf_->vkCmdBindPipeline(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_regular_mdi_wireframe_);
     render_cache_->enumerate_all([this](RenderCache::JobContext const& job_context) -> void* {
       if (job_context.pipeline == RenderCache::Pipeline::Beta) {
-        graphics_cmd_buf_->vkCmdDraw(job_context.object_type == RenderObject::Box ? 36 : 2160, 1, job_context.object_type == RenderObject::Box ? 0 : 36, job_context.job);
+        //graphics_cmd_buf_->vkCmdDraw(job_context.object_type == RenderObject::Box ? 36 : 2160, 1, job_context.object_type == RenderObject::Box ? 0 : 36, job_context.job);
+        graphics_cmd_buf_->vkCmdDraw(3, 1, job_context.object_type == RenderObject::Box ? 2196 : 2199, job_context.job);
       }
       return job_context.user_data;
     });
@@ -984,6 +986,7 @@ void Renderer::create_vertex_buffer() {
   std::vector<Vertex> vertices;
   generate_box_vertices(vertices);
   load_sphere(vertices);
+  generate_triangles(vertices);
 
   vertex_buffer_.reset(new vk::Buffer(*device_, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, sizeof(Vertex) * vertices.size()));
 
@@ -1101,6 +1104,21 @@ void Renderer::load_sphere(std::vector<Vertex>& vertices) {
   interleave_vertex_data(mesh, vertices);
 }
 
+void Renderer::generate_triangles(std::vector<Vertex>& vertices) {
+  const float half = 0.7f;
+  vertices.reserve(vertices.size() + 6);
+  vertices.insert(vertices.end(), {
+    // Pointing up
+    { { -half, -half, -half }, { 0.0f, 1.0f }, { 0.0f, 0.0f, -1.0f } },
+    { { 0.0f, +half, -half }, { 0.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
+    { { +half, -half, -half }, { 1.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
+    // Pointing down
+    { { -half, +half, -half }, { 0.0f, 1.0f }, { 0.0f, 0.0f, -1.0f } },
+    { { +half, +half, -half }, { 0.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
+    { { 0.0f, -half, -half }, { 1.0f, 0.0f }, { 0.0f, 0.0f, -1.0f } },
+  });
+}
+
 void Renderer::interleave_vertex_data(Mesh* mesh, std::vector<Vertex>& vertices) {
   // I don't really use the index buffer, but just duplicate vertices. This is
   // not a particularly good way to render meshes, but the focus here is to
@@ -1196,9 +1214,10 @@ void Renderer::update_indirect_buffer(std::function<void(uint32_t job, VkPipelin
     size_t indirect_buffer_element = job_context.job;
 
     VkDrawIndirectCommand* indirect_command = mapped_indirect_buffer_ + indirect_buffer_element;
-    indirect_command->vertexCount = job_context.object_type == RenderObject::Box ? 36 : 2160;
+    //indirect_command->vertexCount = job_context.object_type == RenderObject::Box ? 36 : 2160;
+    indirect_command->vertexCount = 3;
     indirect_command->instanceCount = 1;
-    indirect_command->firstVertex = job_context.object_type == RenderObject::Box ? 0 : 36;
+    indirect_command->firstVertex = job_context.object_type == RenderObject::Box ? 2196 : 2199;
     indirect_command->firstInstance = job_context.job;
 
     if (dgc) {
