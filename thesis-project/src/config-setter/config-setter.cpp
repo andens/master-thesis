@@ -23,9 +23,9 @@ ConfigSetter::ConfigSetter(uint32_t max_draw_calls) {
   };
 
   std::for_each(strategies.begin(), strategies.end(), [this, max_draw_calls](Renderer::RenderStrategy s) {
-    for (int pipeline_switches = 1; pipeline_switches <= max_draw_calls; pipeline_switches += 1000) {
-      // Should be multiples of 1000 from now on
-      if (pipeline_switches == 1001) {
+    for (int pipeline_switches = 1; pipeline_switches <= max_draw_calls; pipeline_switches += 10000) {
+      // Should be multiples of 10000 from now on
+      if (pipeline_switches == 10001) {
         pipeline_switches--;
       }
 
