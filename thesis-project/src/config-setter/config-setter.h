@@ -16,6 +16,7 @@ public:
   bool more() const;
   void next_config(std::function<void(Configuration const&)> const& impl);
   uint32_t num_configurations() const;
+  void first_config();
 
   ConfigSetter(uint32_t max_draw_calls);
 

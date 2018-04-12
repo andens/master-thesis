@@ -40,6 +40,7 @@ private:
 
 private:
   void modify_pipeline_switch_frequency(Renderer& r);
+  void start_measure_suite(); // Run a bunch of sessions with pre-defined configs
   void start_measure_session(Renderer::RenderStrategy current_strategy);
   void next_measured_frame(Renderer& r);
   void finish_measure_session();
@@ -63,6 +64,7 @@ private:
   int update_ratio_ { 0 };
 
   bool measuring_ { false };
+  bool measuring_suite_ { false }; // Whether we are measuring the suite
   uint32_t measure_current_frame_ { 1 };
   const uint32_t measure_frame_span_ { 100 };
 

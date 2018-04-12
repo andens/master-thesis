@@ -45,3 +45,7 @@ ConfigSetter::ConfigSetter(uint32_t max_draw_calls) {
 uint32_t ConfigSetter::num_configurations() const {
   return static_cast<uint32_t>(configurations_.size());
 }
+
+void ConfigSetter::first_config() {
+  next_config_ = configurations_.begin();
+}

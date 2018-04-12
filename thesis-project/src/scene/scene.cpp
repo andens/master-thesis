@@ -27,7 +27,12 @@ void Scene::update(float delta_time, Renderer& renderer) {
     accumulated_frames_ = 0;
   }
 
-  if (measuring_) {
+  // Suite measurement takes precedence over single measuring to allow us to
+  // go to the next config, skip frames (to let things initialize), etc.
+  if (measuring_suite_) {
+
+  }
+  else if (measuring_) {
     next_measured_frame(renderer);
   }
 
@@ -134,9 +139,16 @@ void Scene::update(float delta_time, Renderer& renderer) {
   ImGui::End();
 
   if (ImGui::Begin("Controls")) {
-    if (measuring_) {
+    // Prioritize the suite measuring logic.
+    if (measuring_suite_) {
+      ImGui::Text("Measuring suite.");
+    }
+    // If we are not measuring a suite, we might be measuring a custom config.
+    else if (measuring_) {
       ImGui::Text("Measuring in progress - please hold. Frame %u of %u.", measure_current_frame_, measure_frame_span_);
     }
+    // If we are not measuring at all, display the controls to manipulate the
+    // configuration.
     else {
       typedef std::pair<char const*, Renderer::RenderStrategy> Strategy;
       std::array<Strategy, 3> strategies {
@@ -211,8 +223,14 @@ void Scene::update(float delta_time, Renderer& renderer) {
 
       // Start measuring session
       {
-        if (ImGui::Button("Measure")) {
+        if (ImGui::Button("Measure this configuration")) {
           start_measure_session(current_strategy);
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Measure config suite")) {
+          start_measure_suite();
         }
 
         ImGui::SameLine();
@@ -294,6 +312,11 @@ void Scene::modify_pipeline_switch_frequency(Renderer& r) {
       }
     }
   });
+}
+
+void Scene::start_measure_suite() {
+  config_setter_->first_config();
+  measuring_suite_ = true;
 }
 
 void Scene::start_measure_session(Renderer::RenderStrategy current_strategy) {
