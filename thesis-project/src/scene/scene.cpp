@@ -213,6 +213,25 @@ void Scene::update(float delta_time, Renderer& renderer) {
       {
         if (ImGui::Button("Measure")) {
           measuring_ = true;
+
+          switch (current_strategy) {
+          case Renderer::RenderStrategy::Regular: {
+            measure_session.strategy = "Regular";
+            break;
+          }
+          case Renderer::RenderStrategy::MDI: {
+            measure_session.strategy = "MDI";
+            break;
+          }
+          case Renderer::RenderStrategy::DGC: {
+            measure_session.strategy = "DGC";
+            break;
+          }
+          default: throw;
+          }
+
+          measure_session.num_pipeline_commands = static_cast<uint32_t>(pipeline_switches_);
+          measure_session.updates_per_frame = max_draw_calls_ / 100 * update_ratio_;
         }
       }
     }
@@ -282,10 +301,10 @@ void Scene::modify_pipeline_switch_frequency(Renderer& r) {
 }
 
 void Scene::next_measured_frame(Renderer& r) {
-  measure_timings_.total += r.measured_time();
-  measure_timings_.gpu += r.gpu_time();
-  measure_timings_.dgc_generation += r.dgc_generation_time();
-  measure_timings_.traversal += r.render_jobs_traversal_time();
+  measure_session.timing.total += r.measured_time();
+  measure_session.timing.gpu += r.gpu_time();
+  measure_session.timing.dgc_generation += r.dgc_generation_time();
+  measure_session.timing.traversal += r.render_jobs_traversal_time();
 
   if (measure_current_frame_ == measure_frame_span_) {
     finish_measure_session();
@@ -297,15 +316,15 @@ void Scene::next_measured_frame(Renderer& r) {
 
 void Scene::finish_measure_session() {
   // Average the times
-  measure_timings_.total /= measure_frame_span_;
-  measure_timings_.gpu /= measure_frame_span_;
-  measure_timings_.dgc_generation /= measure_frame_span_;
-  measure_timings_.traversal /= measure_frame_span_;
+  measure_session.timing.total /= measure_frame_span_;
+  measure_session.timing.gpu /= measure_frame_span_;
+  measure_session.timing.dgc_generation /= measure_frame_span_;
+  measure_session.timing.traversal /= measure_frame_span_;
 
-  // TODO: push timings and config
+  sessions_.push_back(measure_session);
 
   // Reset for next measure session
-  measure_timings_ = {};
+  measure_session = {};
   measure_current_frame_ = 0;
   measuring_ = false;
 }

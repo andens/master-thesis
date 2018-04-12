@@ -2,6 +2,7 @@
 
 #include <deque>
 #include <functional>
+#include <vector>
 
 class Renderer;
 
@@ -26,6 +27,13 @@ private:
     Traverse,
     DgcGen,
     Overhead,
+  };
+
+  struct MeasureSession {
+    char const* strategy;
+    uint32_t num_pipeline_commands;
+    uint32_t updates_per_frame;
+    FrameTimings timing;
   };
 
 private:
@@ -54,5 +62,7 @@ private:
   bool measuring_ { false };
   uint32_t measure_current_frame_ { 1 };
   const uint32_t measure_frame_span_ { 100 };
-  FrameTimings measure_timings_ {};
+
+  MeasureSession measure_session {};
+  std::vector<MeasureSession> sessions_ {};
 };
