@@ -24,24 +24,17 @@ ConfigSetter::ConfigSetter(uint32_t max_draw_calls) {
 
   std::for_each(strategies.begin(), strategies.end(), [this, max_draw_calls](Renderer::RenderStrategy s) {
     for (int pipeline_switches = 1; pipeline_switches <= max_draw_calls; pipeline_switches += 1000) {
-      static bool first = true;
-      static bool second = false;
-
-      if (second) {
-        pipeline_switches--; // Should be multiples of 1000 from now on
+      // Should be multiples of 1000 from now on
+      if (pipeline_switches == 1001) {
+        pipeline_switches--;
       }
 
-      for (int update_ratio = 1; update_ratio <= 100; ++update_ratio) {
+      for (int update_ratio = 0; update_ratio <= 100; update_ratio += 10) {
         Configuration c {};
         c.strategy = s;
         c.num_pipeline_commands = pipeline_switches;
         c.update_ratio = update_ratio;
         configurations_.push_back(c);
-      }
-
-      if (first) {
-        first = false;
-        second = true;
       }
     }
   });
