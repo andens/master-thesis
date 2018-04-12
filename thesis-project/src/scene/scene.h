@@ -44,6 +44,7 @@ private:
   void start_measure_session(Renderer::RenderStrategy current_strategy);
   void next_measured_frame(Renderer& r);
   void finish_measure_session();
+  void finish_measure_suite();
   void set_monitor_variant(MonitorVariant v);
 
 private:
@@ -65,8 +66,10 @@ private:
 
   bool measuring_ { false };
   bool measuring_suite_ { false }; // Whether we are measuring the suite
+  bool suite_measure_skip_this_frame_ { false };
   uint32_t measure_current_frame_ { 1 };
   const uint32_t measure_frame_span_ { 100 };
+  uint32_t current_suite_configuration_ { 0 };
 
   MeasureSession measure_session {};
   std::vector<MeasureSession> sessions_ {};

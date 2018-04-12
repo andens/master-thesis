@@ -30,7 +30,31 @@ void Scene::update(float delta_time, Renderer& renderer) {
   // Suite measurement takes precedence over single measuring to allow us to
   // go to the next config, skip frames (to let things initialize), etc.
   if (measuring_suite_) {
-
+    // If we skip this frame, do nothing except marking the next frame as go
+    if (suite_measure_skip_this_frame_) {
+      suite_measure_skip_this_frame_ = false;
+    }
+    // If we are not measuring, start the next configuration
+    else if (!measuring_) {
+      if (config_setter_->more()) {
+        config_setter_->next_config([this, &renderer](ConfigSetter::Configuration const& c) {
+          renderer.use_render_strategy(c.strategy);
+          pipeline_switches_ = c.num_pipeline_commands;
+          modify_pipeline_switch_frequency(renderer);
+          update_ratio_ = c.update_ratio;
+          start_measure_session(c.strategy);
+        });
+        suite_measure_skip_this_frame_ = true;
+        current_suite_configuration_++;
+      }
+      // No more configurations; finished suite
+      else {
+        finish_measure_suite();
+      }
+    }
+    else {
+      next_measured_frame(renderer);
+    }
   }
   else if (measuring_) {
     next_measured_frame(renderer);
@@ -141,7 +165,16 @@ void Scene::update(float delta_time, Renderer& renderer) {
   if (ImGui::Begin("Controls")) {
     // Prioritize the suite measuring logic.
     if (measuring_suite_) {
-      ImGui::Text("Measuring suite.");
+      ImGui::Text("Measuring in progress - please hold.\nSuite %u of %u.\nFrame %u of %u.", current_suite_configuration_, config_setter_->num_configurations(), measure_current_frame_, measure_frame_span_);
+      auto strat_to_string = [&renderer]() -> char const* {
+        switch (renderer.current_strategy()) {
+        case Renderer::RenderStrategy::Regular: return "Regular";
+        case Renderer::RenderStrategy::MDI: return "MDI";
+        case Renderer::RenderStrategy::DGC: return "DGC";
+        default: throw;
+        }
+      };
+      ImGui::Text("Configuration:\n\tStrategy: %s\n\tPipeline commands: %d\n\tUpdate ratio: %d%%", strat_to_string(), pipeline_switches_, update_ratio_);
     }
     // If we are not measuring a suite, we might be measuring a custom config.
     else if (measuring_) {
@@ -231,17 +264,6 @@ void Scene::update(float delta_time, Renderer& renderer) {
 
         if (ImGui::Button("Measure config suite")) {
           start_measure_suite();
-        }
-
-        ImGui::SameLine();
-
-        if (config_setter_->more() && ImGui::Button("Next config")) {
-          config_setter_->next_config([this, &renderer](ConfigSetter::Configuration const& c) {
-            renderer.use_render_strategy(c.strategy);
-            pipeline_switches_ = c.num_pipeline_commands;
-            modify_pipeline_switch_frequency(renderer);
-            update_ratio_ = c.update_ratio;
-          });
         }
       }
     }
@@ -369,6 +391,11 @@ void Scene::finish_measure_session() {
   measure_session = {};
   measure_current_frame_ = 0;
   measuring_ = false;
+}
+
+void Scene::finish_measure_suite() {
+  measuring_suite_ = false;
+  current_suite_configuration_ = 0;
 }
 
 void Scene::set_monitor_variant(MonitorVariant v) {
