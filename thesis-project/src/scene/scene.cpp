@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <imgui.h>
+#include "../config-setter/config-setter.h"
 #include "../renderer/renderer.h"
 #include "../render-cache/render-cache.h"
 
@@ -233,6 +234,12 @@ void Scene::update(float delta_time, Renderer& renderer) {
           measure_session.num_pipeline_commands = static_cast<uint32_t>(pipeline_switches_);
           measure_session.updates_per_frame = max_draw_calls_ / 100 * update_ratio_;
         }
+
+        ImGui::SameLine();
+
+        if (config_setter_->more() && ImGui::Button("Next config")) {
+          config_setter_->next_config(*this);
+        }
       }
     }
   }
@@ -264,7 +271,11 @@ Scene::Scene(Renderer& renderer) {
     FrameTimings timings {};
     render_time_history_.push_back(timings);
   }
+
+  config_setter_.reset(new ConfigSetter);
 }
+
+Scene::~Scene() = default;
 
 void Scene::modify_pipeline_switch_frequency(Renderer& r) {
   r.borrow_render_cache([this](RenderCache& cache) {

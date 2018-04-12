@@ -4,13 +4,17 @@
 #include <functional>
 #include <vector>
 
+class ConfigSetter;
 class Renderer;
 
 class Scene {
+  friend class ConfigSetter;
+
 public:
   void update(float delta_time, Renderer& renderer);
 
   Scene(Renderer& renderer);
+  ~Scene();
 
 private:
   struct FrameTimings {
@@ -65,4 +69,6 @@ private:
 
   MeasureSession measure_session {};
   std::vector<MeasureSession> sessions_ {};
+
+  std::unique_ptr<ConfigSetter> config_setter_;
 };
