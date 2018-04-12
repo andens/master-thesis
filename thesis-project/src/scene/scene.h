@@ -1,6 +1,7 @@
 #pragma once
 
 #include <deque>
+#include <functional>
 
 class Renderer;
 
@@ -18,8 +19,18 @@ private:
     double traversal;
   };
 
+  enum class MonitorVariant {
+    Total = 0,
+    Gpu,
+    Cpu,
+    Traverse,
+    DgcGen,
+    Overhead,
+  };
+
 private:
   void modify_pipeline_switch_frequency(Renderer& r);
+  void set_monitor_variant(MonitorVariant v);
 
 private:
   const uint32_t max_draw_calls_ { 100000 };
@@ -32,6 +43,8 @@ private:
   std::deque<FrameTimings> render_time_history_;
   const float history_time_span_ { 30.0f }; // Seconds of history shown
   //float largest_history_entry_ { 0.0f };
+  MonitorVariant monitor_variant_ { MonitorVariant::Total };
+  std::function<double(FrameTimings const&)> monitor_value_ { nullptr };
 
   int pipeline_switches_ { 1 };
   int update_ratio_ { 0 };

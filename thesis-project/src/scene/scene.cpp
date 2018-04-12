@@ -61,13 +61,67 @@ void Scene::update(float delta_time, Renderer& renderer) {
     if (ImGui::CollapsingHeader("Render time", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
       ImVec2 plot_extent { ImGui::GetContentRegionAvailWidth() - 70, 100 };
       ImGui::PlotLines("", [](void* data, int idx) -> float {
-        auto frame_times = reinterpret_cast<std::deque<FrameTimings>*>(data);
-        return (*frame_times)[idx].total;
-      }, &render_time_history_, render_time_history_.size(), 0, nullptr, 0.0f, FLT_MAX, plot_extent);
+        auto self = reinterpret_cast<Scene const*>(data);
+        return self->monitor_value_(self->render_time_history_[idx]);
+      }, this, render_time_history_.size(), 0, nullptr, 0.0f, FLT_MAX, plot_extent);
 
-      ImGui::SameLine();
+      //ImGui::SameLine();
 
       //ImGui::Text("%-3.4f ms", largest_history_entry_);
+
+      if (ImGui::RadioButton("Total", monitor_variant_ == MonitorVariant::Total)) {
+        set_monitor_variant(MonitorVariant::Total);
+      }
+      ImGui::SameLine();
+      ImGui::Text("(?)");
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Complete time from recording on CPU until rendering finished.");
+      }
+
+      if (ImGui::RadioButton("GPU", monitor_variant_ == MonitorVariant::Gpu)) {
+        set_monitor_variant(MonitorVariant::Gpu);
+      }
+      ImGui::SameLine();
+      ImGui::Text("(?)");
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("GPU time spent rendering the scene and UI.\nNote: Includes DGC generation.");
+      }
+
+      if (ImGui::RadioButton("CPU", monitor_variant_ == MonitorVariant::Cpu)) {
+        set_monitor_variant(MonitorVariant::Cpu);
+      }
+      ImGui::SameLine();
+      ImGui::Text("(?)");
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("CPU time, including traversing jobs.");
+      }
+
+      if (ImGui::RadioButton("Traverse", monitor_variant_ == MonitorVariant::Traverse)) {
+        set_monitor_variant(MonitorVariant::Traverse);
+      }
+      ImGui::SameLine();
+      ImGui::Text("(?)");
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Traverse render jobs without doing anything with them.");
+      }
+
+      if (ImGui::RadioButton("DGC gen.", monitor_variant_ == MonitorVariant::DgcGen)) {
+        set_monitor_variant(MonitorVariant::DgcGen);
+      }
+      ImGui::SameLine();
+      ImGui::Text("(?)");
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("GPU time spent generating commands.\nDoes not include executing them.");
+      }
+
+      if (ImGui::RadioButton("Overhead", monitor_variant_ == MonitorVariant::Overhead)) {
+        set_monitor_variant(MonitorVariant::Overhead);
+      }
+      ImGui::SameLine();
+      ImGui::Text("(?)");
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Overhead incurred by a strategy. This is the time spent with\nrecording, updating indirect buffers, and DGC generation.\nCalculated as total - traversal - gpu + dgc gen.");
+      }
     }
   }
   ImGui::End();
@@ -177,6 +231,8 @@ Scene::Scene(Renderer& renderer) {
   });
   */
 
+  set_monitor_variant(MonitorVariant::Total);
+
   uint32_t entries = history_time_span_ / time_per_accumulation_;
   for (uint32_t i = 0; i < entries; ++i) {
     FrameTimings timings {};
@@ -216,4 +272,36 @@ void Scene::modify_pipeline_switch_frequency(Renderer& r) {
       }
     }
   });
+}
+
+void Scene::set_monitor_variant(MonitorVariant v) {
+  monitor_variant_ = v;
+
+  switch (monitor_variant_) {
+  case MonitorVariant::Total: {
+    monitor_value_ = [](FrameTimings const& t) -> double { return t.total; };
+    break;
+  }
+  case MonitorVariant::Gpu: {
+    monitor_value_ = [](FrameTimings const& t) -> double { return t.gpu; };
+    break;
+  }
+  case MonitorVariant::Cpu: {
+    monitor_value_ = [](FrameTimings const& t) -> double { return t.total - t.gpu; };
+    break;
+  }
+  case MonitorVariant::Traverse: {
+    monitor_value_ = [](FrameTimings const& t) -> double { return t.traversal; };
+    break;
+  }
+  case MonitorVariant::DgcGen: {
+    monitor_value_ = [](FrameTimings const& t) -> double { return t.dgc_generation; };
+    break;
+  }
+  case MonitorVariant::Overhead: {
+    monitor_value_ = [](FrameTimings const& t) -> double { return t.total - t.traversal - t.gpu + t.dgc_generation; };
+    break;
+  }
+  default: throw;
+  }
 }
