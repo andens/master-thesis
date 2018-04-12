@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <imgui.h>
+#include <iostream>
+#include <fstream>
 #include "../config-setter/config-setter.h"
 #include "../render-cache/render-cache.h"
 
@@ -267,6 +269,10 @@ void Scene::update(float delta_time, Renderer& renderer) {
         if (ImGui::Button("Measure config suite")) {
           start_measure_suite();
         }
+
+        if (ImGui::Button("Save to file")) {
+          save_sessions_to_file();
+        }
       }
     }
   }
@@ -430,4 +436,28 @@ void Scene::set_monitor_variant(MonitorVariant v) {
   }
   default: throw;
   }
+}
+
+void Scene::save_sessions_to_file() {
+  std::ofstream file { "measurements.txt" };
+  if (!file) {
+    std::cout << "Could not open file to dump results" << std::endl;
+    return;
+  }
+
+  file << "Scene used " << max_draw_calls_ << " objects. Times are in ms." << std::endl;
+  file << "strat, pipeline commands, updates per frame, average total time, average gpu time, average dgc gen. time, average traversal time" << std::endl << std::endl;
+
+  for (auto& s : sessions_) {
+    file << s.strategy << ", ";
+    file << s.num_pipeline_commands << ", ";
+    file << s.updates_per_frame << ", ";
+    file << s.timing.total << ", ";
+    file << s.timing.gpu << ", ";
+    file << s.timing.dgc_generation << ", ";
+    file << s.timing.traversal;
+    file << std::endl;
+  }
+
+  file.close();
 }

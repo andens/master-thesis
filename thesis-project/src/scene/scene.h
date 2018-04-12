@@ -46,6 +46,7 @@ private:
   void finish_measure_session();
   void finish_measure_suite();
   void set_monitor_variant(MonitorVariant v);
+  void save_sessions_to_file();
 
 private:
   const uint32_t max_draw_calls_ { 100000 };
