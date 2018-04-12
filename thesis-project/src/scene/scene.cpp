@@ -238,7 +238,12 @@ void Scene::update(float delta_time, Renderer& renderer) {
         ImGui::SameLine();
 
         if (config_setter_->more() && ImGui::Button("Next config")) {
-          config_setter_->next_config(*this);
+          config_setter_->next_config([this, &renderer](ConfigSetter::Configuration const& c) {
+            renderer.use_render_strategy(c.strategy);
+            pipeline_switches_ = c.num_pipeline_commands;
+            modify_pipeline_switch_frequency(renderer);
+            update_ratio_ = c.update_ratio;
+          });
         }
       }
     }

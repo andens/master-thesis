@@ -2,15 +2,15 @@
 
 #include <algorithm>
 #include <array>
-#include "../scene/scene.h"
 
 bool ConfigSetter::more() const {
   return next_config_ != configurations_.end();
 }
 
-void ConfigSetter::next_config(Scene& scene) {
+void ConfigSetter::next_config(std::function<void(Configuration const&)> const& impl) {
   if (more()) {
-    // do stuff
+    impl(*next_config_);
+    next_config_++;
   }
 }
 

@@ -8,8 +8,6 @@ class ConfigSetter;
 class Renderer;
 
 class Scene {
-  friend class ConfigSetter;
-
 public:
   void update(float delta_time, Renderer& renderer);
 
