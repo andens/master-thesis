@@ -27,6 +27,10 @@ void Scene::update(float delta_time, Renderer& renderer) {
     accumulated_frames_ = 0;
   }
 
+  if (measuring_) {
+    next_measured_frame(renderer);
+  }
+
   // Simple logic to stop and start rendering the first object in intervals
   // of one second. Every new reappearance switches mesh to demonstrate that
   // draw calls can not only be individually updated, they can also completely
@@ -275,6 +279,35 @@ void Scene::modify_pipeline_switch_frequency(Renderer& r) {
       }
     }
   });
+}
+
+void Scene::next_measured_frame(Renderer& r) {
+  measure_timings_.total += r.measured_time();
+  measure_timings_.gpu += r.gpu_time();
+  measure_timings_.dgc_generation += r.dgc_generation_time();
+  measure_timings_.traversal += r.render_jobs_traversal_time();
+
+  if (measure_current_frame_ == measure_frame_span_) {
+    finish_measure_session();
+  }
+  else {
+    measure_current_frame_++;
+  }
+}
+
+void Scene::finish_measure_session() {
+  // Average the times
+  measure_timings_.total /= measure_frame_span_;
+  measure_timings_.gpu /= measure_frame_span_;
+  measure_timings_.dgc_generation /= measure_frame_span_;
+  measure_timings_.traversal /= measure_frame_span_;
+
+  // TODO: push timings and config
+
+  // Reset for next measure session
+  measure_timings_ = {};
+  measure_current_frame_ = 0;
+  measuring_ = false;
 }
 
 void Scene::set_monitor_variant(MonitorVariant v) {

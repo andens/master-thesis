@@ -30,6 +30,8 @@ private:
 
 private:
   void modify_pipeline_switch_frequency(Renderer& r);
+  void next_measured_frame(Renderer& r);
+  void finish_measure_session();
   void set_monitor_variant(MonitorVariant v);
 
 private:
@@ -52,4 +54,5 @@ private:
   bool measuring_ { false };
   uint32_t measure_current_frame_ { 1 };
   const uint32_t measure_frame_span_ { 100 };
+  FrameTimings measure_timings_ {};
 };
