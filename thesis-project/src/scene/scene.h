@@ -42,7 +42,7 @@ private:
 
   std::deque<FrameTimings> render_time_history_;
   const float history_time_span_ { 30.0f }; // Seconds of history shown
-  //float largest_history_entry_ { 0.0f };
+  double largest_history_entry_ { 0.0f };
   MonitorVariant monitor_variant_ { MonitorVariant::Total };
   std::function<double(FrameTimings const&)> monitor_value_ { nullptr };
 

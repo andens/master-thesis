@@ -25,12 +25,6 @@ void Scene::update(float delta_time, Renderer& renderer) {
     render_time_history_.push_back(accumulated_timings_);
     accumulated_timings_ = {}; // Reset
     accumulated_frames_ = 0;
-    //largest_history_entry_ = 0.0f;
-    //std::for_each(render_time_history_.begin(), render_time_history_.end(), [this](float val) {
-    //  if (val > largest_history_entry_) {
-    //    largest_history_entry_ = val;
-    //  }
-    //});
   }
 
   // Simple logic to stop and start rendering the first object in intervals
@@ -59,15 +53,19 @@ void Scene::update(float delta_time, Renderer& renderer) {
 
   if (ImGui::Begin("Monitor")) {
     if (ImGui::CollapsingHeader("Render time", ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen)) {
-      ImVec2 plot_extent { ImGui::GetContentRegionAvailWidth() - 70, 100 };
+      largest_history_entry_ = 0.0;
+      //ImVec2 plot_extent { ImGui::GetContentRegionAvailWidth() - 70, 100 };
+      ImVec2 plot_extent { ImGui::GetContentRegionAvailWidth(), 100 };
       ImGui::PlotLines("", [](void* data, int idx) -> float {
-        auto self = reinterpret_cast<Scene const*>(data);
-        return self->monitor_value_(self->render_time_history_[idx]);
+        auto self = reinterpret_cast<Scene*>(data);
+        double entry = self->monitor_value_(self->render_time_history_[idx]);
+        if (entry > self->largest_history_entry_) {
+          self->largest_history_entry_ = entry;
+        }
+        return static_cast<float>(entry);
       }, this, render_time_history_.size(), 0, nullptr, 0.0f, FLT_MAX, plot_extent);
 
-      //ImGui::SameLine();
-
-      //ImGui::Text("%-3.4f ms", largest_history_entry_);
+      ImGui::Columns(2);
 
       if (ImGui::RadioButton("Total", monitor_variant_ == MonitorVariant::Total)) {
         set_monitor_variant(MonitorVariant::Total);
@@ -122,6 +120,11 @@ void Scene::update(float delta_time, Renderer& renderer) {
       if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Overhead incurred by a strategy. This is the time spent with\nrecording, updating indirect buffers, and DGC generation.\nCalculated as total - traversal - gpu + dgc gen.");
       }
+
+      ImGui::NextColumn();
+
+      ImGui::Text("Max: %-3.4f ms", largest_history_entry_);
+      ImGui::Text("Latest: %-3.4f ms", monitor_value_(render_time_history_.back()));
     }
   }
   ImGui::End();
