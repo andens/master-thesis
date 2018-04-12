@@ -3,9 +3,9 @@
 #include <deque>
 #include <functional>
 #include <vector>
+#include "../renderer/renderer.h"
 
 class ConfigSetter;
-class Renderer;
 
 class Scene {
 public:
@@ -40,6 +40,7 @@ private:
 
 private:
   void modify_pipeline_switch_frequency(Renderer& r);
+  void start_measure_session(Renderer::RenderStrategy current_strategy);
   void next_measured_frame(Renderer& r);
   void finish_measure_session();
   void set_monitor_variant(MonitorVariant v);

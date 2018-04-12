@@ -4,7 +4,6 @@
 #include <array>
 #include <imgui.h>
 #include "../config-setter/config-setter.h"
-#include "../renderer/renderer.h"
 #include "../render-cache/render-cache.h"
 
 void Scene::update(float delta_time, Renderer& renderer) {
@@ -213,26 +212,7 @@ void Scene::update(float delta_time, Renderer& renderer) {
       // Start measuring session
       {
         if (ImGui::Button("Measure")) {
-          measuring_ = true;
-
-          switch (current_strategy) {
-          case Renderer::RenderStrategy::Regular: {
-            measure_session.strategy = "Regular";
-            break;
-          }
-          case Renderer::RenderStrategy::MDI: {
-            measure_session.strategy = "MDI";
-            break;
-          }
-          case Renderer::RenderStrategy::DGC: {
-            measure_session.strategy = "DGC";
-            break;
-          }
-          default: throw;
-          }
-
-          measure_session.num_pipeline_commands = static_cast<uint32_t>(pipeline_switches_);
-          measure_session.updates_per_frame = max_draw_calls_ / 100 * update_ratio_;
+          start_measure_session(current_strategy);
         }
 
         ImGui::SameLine();
@@ -314,6 +294,29 @@ void Scene::modify_pipeline_switch_frequency(Renderer& r) {
       }
     }
   });
+}
+
+void Scene::start_measure_session(Renderer::RenderStrategy current_strategy) {
+  measuring_ = true;
+
+  switch (current_strategy) {
+  case Renderer::RenderStrategy::Regular: {
+    measure_session.strategy = "Regular";
+    break;
+  }
+  case Renderer::RenderStrategy::MDI: {
+    measure_session.strategy = "MDI";
+    break;
+  }
+  case Renderer::RenderStrategy::DGC: {
+    measure_session.strategy = "DGC";
+    break;
+  }
+  default: throw;
+  }
+
+  measure_session.num_pipeline_commands = static_cast<uint32_t>(pipeline_switches_);
+  measure_session.updates_per_frame = max_draw_calls_ / 100 * update_ratio_;
 }
 
 void Scene::next_measured_frame(Renderer& r) {
