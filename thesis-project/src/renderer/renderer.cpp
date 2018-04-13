@@ -35,6 +35,8 @@
 #include "../render-cache/render-cache.h"
 #include "../render-jobs-descriptor-set/render-jobs-descriptor-set.h"
 
+extern const uint32_t g_draw_call_count;
+
 Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
     render_area_ { render_width, render_height } {
   vk_globals_.reset(new vkgen::GlobalFunctions("vulkan-1.dll"));
@@ -68,10 +70,10 @@ Renderer::Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height) :
   use_render_strategy(render_strategy_);
 
   // Position the render jobs in a grid
-  uint32_t rows = static_cast<uint32_t>(sqrtf(static_cast<float>(max_draw_calls_)));
+  uint32_t rows = static_cast<uint32_t>(sqrtf(static_cast<float>(g_draw_call_count)));
   float spacing = 2.0f;
   float y = -0.5f * rows * spacing;
-  for (uint32_t i = 0; i < max_draw_calls_; ++i) {
+  for (uint32_t i = 0; i < g_draw_call_count; ++i) {
     update_transform(i, DirectX::XMMatrixTranslation((-0.5f * rows + static_cast<float>(i % rows)) * spacing, y, 140.0f));
     if (i % rows == rows - 1) {
       y += spacing;
@@ -283,7 +285,7 @@ void Renderer::render() {
     commands_info.indirectCommandsLayout = indirect_commands_layout_;
     commands_info.indirectCommandsTokenCount = static_cast<uint32_t>(input_tokens.size());
     commands_info.pIndirectCommandsTokens = input_tokens.data();
-    commands_info.maxSequencesCount = max_draw_calls_; // Actual count because of no count buffer
+    commands_info.maxSequencesCount = g_draw_call_count; // Actual count because of no count buffer
     commands_info.targetCommandBuffer = dgc_cmd_buf_->command_buffer();
     commands_info.sequencesCountBuffer = VK_NULL_HANDLE; // Don't source count from a buffer, I provide actual count in |maxSequencesCount|
     commands_info.sequencesCountOffset = 0; // Not used (no sequencesCountBuffer)
@@ -1155,8 +1157,8 @@ void Renderer::create_descriptor_sets() {
 }
 
 void Renderer::create_indirect_buffer() {
-  indirect_buffer_.reset(new vk::Buffer { *device_, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, sizeof(VkDrawIndirectCommand) * max_draw_calls_ });
-  device_->vkMapMemory(indirect_buffer_->vulkan_memory_handle(), 0, sizeof(VkDrawIndirectCommand) * max_draw_calls_, 0, reinterpret_cast<void**>(&mapped_indirect_buffer_));
+  indirect_buffer_.reset(new vk::Buffer { *device_, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, sizeof(VkDrawIndirectCommand) * g_draw_call_count });
+  device_->vkMapMemory(indirect_buffer_->vulkan_memory_handle(), 0, sizeof(VkDrawIndirectCommand) * g_draw_call_count, 0, reinterpret_cast<void**>(&mapped_indirect_buffer_));
 }
 
 // TODO: The next step is to update the indirect buffer incrementally.
@@ -1247,7 +1249,7 @@ void Renderer::update_indirect_buffer(std::function<void(uint32_t job, VkPipelin
     return reinterpret_cast<void*>(indirect_buffer_element);
   });
 
-  pipeline_switch(max_draw_calls_, current_pipeline == RenderCache::Pipeline::Alpha ? pipeline_regular_mdi_solid_ : pipeline_regular_mdi_wireframe_);
+  pipeline_switch(g_draw_call_count, current_pipeline == RenderCache::Pipeline::Alpha ? pipeline_regular_mdi_solid_ : pipeline_regular_mdi_wireframe_);
 }
 #pragma pop_macro("max");
 
@@ -1540,24 +1542,24 @@ void Renderer::create_dgc_resources() {
   create_indirect_commands_layout();
   reserve_space_for_indirect_commands();
 
-  dgc_pipeline_parameters_.reset(new vk::Buffer { *device_, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, max_draw_calls_ * sizeof(uint32_t) });
+  dgc_pipeline_parameters_.reset(new vk::Buffer { *device_, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, g_draw_call_count * sizeof(uint32_t) });
 
   // Initialize pipeline references to 0 (which means all would use the same
   // pipeline that was registered to index 0 by me).
-  device_->vkMapMemory(dgc_pipeline_parameters_->vulkan_memory_handle(), 0, max_draw_calls_ * sizeof(uint32_t), 0, reinterpret_cast<void**>(&mapped_dgc_pipeline_parameters_));
-  memset(mapped_dgc_pipeline_parameters_, 0, max_draw_calls_ * sizeof(uint32_t));
+  device_->vkMapMemory(dgc_pipeline_parameters_->vulkan_memory_handle(), 0, g_draw_call_count * sizeof(uint32_t), 0, reinterpret_cast<void**>(&mapped_dgc_pipeline_parameters_));
+  memset(mapped_dgc_pipeline_parameters_, 0, g_draw_call_count * sizeof(uint32_t));
   VkMappedMemoryRange flush_range {};
   flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
   flush_range.pNext = nullptr;
   flush_range.memory = dgc_pipeline_parameters_->vulkan_memory_handle();
   flush_range.offset = 0;
-  flush_range.size = max_draw_calls_ * sizeof(uint32_t);
+  flush_range.size = g_draw_call_count * sizeof(uint32_t);
   device_->vkFlushMappedMemoryRanges(1, &flush_range);
 
   // Size: one u32 for indexing the push constant entry in table, another one
   // for the actual push constant data (offset and size is set in the token).
-  dgc_push_constants_.reset(new vk::Buffer { *device_, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, max_draw_calls_ * sizeof(Push) });
-  device_->vkMapMemory(dgc_push_constants_->vulkan_memory_handle(), 0, max_draw_calls_ * sizeof(Push), 0, reinterpret_cast<void**>(&mapped_dgc_push_constants_));
+  dgc_push_constants_.reset(new vk::Buffer { *device_, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, g_draw_call_count * sizeof(Push) });
+  device_->vkMapMemory(dgc_push_constants_->vulkan_memory_handle(), 0, g_draw_call_count * sizeof(Push), 0, reinterpret_cast<void**>(&mapped_dgc_push_constants_));
 }
 
 void Renderer::create_object_table() {
@@ -1717,7 +1719,7 @@ void Renderer::reserve_space_for_indirect_commands() {
   // does indeed live on the GPU according to Christoph Kubisch. The number of
   // sequences is an upper limit on how many times the indirect commands layout
   // will be stamped out, I believe.
-  reserve_info.maxSequencesCount = max_draw_calls_;
+  reserve_info.maxSequencesCount = g_draw_call_count;
 
   // Must be called in a render pass...
   dgc_cmd_buf_->vkCmdReserveSpaceForCommandsNVX(&reserve_info);

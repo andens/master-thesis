@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+extern const uint32_t g_draw_call_count;
+
 /*
 void RenderCache::start_rendering(uint32_t job, RenderObject object_type, Pipeline pipeline) {
   // Note: this is a very trivial approach to adding a render job. We do not
@@ -35,7 +37,7 @@ void RenderCache::dirtify(uint32_t job) {
 }
 
 void RenderCache::dirtify_all() {
-  for (uint32_t i = 0; i < max_draw_calls_; ++i) {
+  for (uint32_t i = 0; i < g_draw_call_count; ++i) {
     dirtify(i);
   }
 }
@@ -64,7 +66,7 @@ void RenderCache::enumerate_changes(std::function<void*(Change change, JobContex
 void RenderCache::clear() {
   jobs_.clear();
 
-  for (uint32_t i = 0; i < max_draw_calls_; ++i) {
+  for (uint32_t i = 0; i < g_draw_call_count; ++i) {
     JobContext context;
     context.job = i;
     context.object_type = i % 2 == 0 ? RenderObject::Sphere : RenderObject::Box;
@@ -77,6 +79,6 @@ void RenderCache::clear() {
 }
 
 RenderCache::RenderCache() {
-  jobs_.reserve(max_draw_calls_);
+  jobs_.reserve(g_draw_call_count);
   clear();
 }

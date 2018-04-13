@@ -49,8 +49,6 @@ private:
   void save_sessions_to_file();
 
 private:
-  const uint32_t max_draw_calls_ { 100000 };
-
   FrameTimings accumulated_timings_ {};
   uint32_t accumulated_frames_ { 0 };
   float accumulation_timer_ { 0.0f };

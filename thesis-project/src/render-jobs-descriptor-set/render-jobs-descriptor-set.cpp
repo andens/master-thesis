@@ -7,7 +7,7 @@
 #include <vulkan-helpers/descriptor_set_layout_builder.h>
 #include <vulkan-helpers/device.h>
 
-const uint32_t max_render_jobs = 100000;
+extern const uint32_t g_draw_call_count;
 
 void RenderJobsDescriptorSet::destroy(vk::Device& device) {
   layout_->destroy(device);
@@ -43,14 +43,14 @@ void RenderJobsDescriptorSet::update_data(vk::Device& device, uint32_t render_jo
 }
 
 RenderJobsDescriptorSet::RenderJobsDescriptorSet(vk::Device& device, vk::DescriptorPool& pool) {
-  storage_buffer_.reset(new vk::Buffer { device, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, sizeof(RenderJobData) * max_render_jobs });
+  storage_buffer_.reset(new vk::Buffer { device, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, sizeof(RenderJobData) * g_draw_call_count });
 
   vk::DescriptorSetLayoutBuilder layout_builder;
   layout_builder.storage_buffer(VK_SHADER_STAGE_VERTEX_BIT, 1);
   layout_.reset(new vk::DescriptorSetLayout { device, layout_builder });
   set_ = pool.allocate(device, *layout_);
 
-  set_->write_storage_buffer(0, storage_buffer_->vulkan_buffer_handle(), 0, sizeof(RenderJobData) * max_render_jobs);
+  set_->write_storage_buffer(0, storage_buffer_->vulkan_buffer_handle(), 0, sizeof(RenderJobData) * g_draw_call_count);
   set_->update_pending(device);
 }
 

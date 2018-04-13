@@ -61,6 +61,5 @@ public:
   RenderCache();
 
 private:
-  const uint32_t max_draw_calls_ { 100000 };
   std::vector<JobContext> jobs_;
 };

@@ -8,6 +8,8 @@
 #include "../config-setter/config-setter.h"
 #include "../render-cache/render-cache.h"
 
+extern const uint32_t g_draw_call_count;
+
 void Scene::update(float delta_time, Renderer& renderer) {
   // Get the previous frame render time to update graph
   accumulated_timings_.total += renderer.measured_time();
@@ -222,7 +224,7 @@ void Scene::update(float delta_time, Renderer& renderer) {
         ImGui::PopItemWidth();
         ImGui::SameLine();
         ImGui::PushItemWidth(70.0f);
-        if (ImGui::DragInt("##pipeline switches", &pipeline_switches_, 100.0f, 1, max_draw_calls_)) {
+        if (ImGui::DragInt("##pipeline switches", &pipeline_switches_, 100.0f, 1, g_draw_call_count)) {
           if (pipeline_switches_ % 100 == 1 && pipeline_switches_ != 1) {
             pipeline_switches_--;
           }
@@ -255,7 +257,7 @@ void Scene::update(float delta_time, Renderer& renderer) {
           ImGui::SetTooltip("Frequency of incremental changes during a frame.\nFor MDI and DGC, this is how many draw calls are\nrecorded during the frame. Regular is unaffected\nby this value as everything is always recorded.");
         }
         ImGui::SameLine();
-        ImGui::Text("(%u / %u).", max_draw_calls_ / 100 * update_ratio_, max_draw_calls_);
+        ImGui::Text("(%u / %u).", g_draw_call_count / 100 * update_ratio_, g_draw_call_count);
       }
 
       // Start measuring session
@@ -279,7 +281,7 @@ void Scene::update(float delta_time, Renderer& renderer) {
   ImGui::End();
 
   renderer.borrow_render_cache([this](RenderCache& cache) {
-    uint32_t dirty_count = max_draw_calls_ / 100 * update_ratio_;
+    uint32_t dirty_count = g_draw_call_count / 100 * update_ratio_;
     for (uint32_t i = 0; i < dirty_count; ++i) {
       cache.dirtify(i);
     }
@@ -305,7 +307,7 @@ Scene::Scene(Renderer& renderer) {
     render_time_history_.push_back(timings);
   }
 
-  config_setter_.reset(new ConfigSetter { max_draw_calls_ });
+  config_setter_.reset(new ConfigSetter { g_draw_call_count });
 }
 
 Scene::~Scene() = default;
@@ -321,12 +323,12 @@ void Scene::modify_pipeline_switch_frequency(Renderer& r) {
     RenderCache::Pipeline use_pipeline = RenderCache::Pipeline::Alpha;
     RenderCache::Pipeline switch_pipeline = RenderCache::Pipeline::Beta;
 
-    uint32_t batch_size = max_draw_calls_ / pipeline_switches_;
-    uint32_t groups_with_extra_job = max_draw_calls_ % pipeline_switches_;
+    uint32_t batch_size = g_draw_call_count / pipeline_switches_;
+    uint32_t groups_with_extra_job = g_draw_call_count % pipeline_switches_;
 
     uint32_t objects_since_switch = 0;
     uint32_t groups_processed = 0;
-    for (uint32_t i = 0; i < max_draw_calls_; ++i) {
+    for (uint32_t i = 0; i < g_draw_call_count; ++i) {
       cache.modify_pipeline(i, use_pipeline);
 
       ++objects_since_switch;
@@ -369,7 +371,7 @@ void Scene::start_measure_session(Renderer::RenderStrategy current_strategy) {
   }
 
   measure_session.num_pipeline_commands = static_cast<uint32_t>(pipeline_switches_);
-  measure_session.updates_per_frame = max_draw_calls_ / 100 * update_ratio_;
+  measure_session.updates_per_frame = g_draw_call_count / 100 * update_ratio_;
 }
 
 void Scene::next_measured_frame(Renderer& r) {
@@ -445,7 +447,7 @@ void Scene::save_sessions_to_file() {
     return;
   }
 
-  file << "Scene used " << max_draw_calls_ << " objects. Times are in ms." << std::endl;
+  file << "Scene used " << g_draw_call_count << " objects. Times are in ms." << std::endl;
   file << "strat, pipeline commands, updates per frame, average total time, average gpu time, average dgc gen. time, average traversal time" << std::endl << std::endl;
 
   for (auto& s : sessions_) {
