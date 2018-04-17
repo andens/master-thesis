@@ -10,6 +10,7 @@ public:
     Renderer::RenderStrategy strategy;
     int num_pipeline_commands;
     int update_ratio;
+    Renderer::Flush flush_behavior;
   };
 
 public:

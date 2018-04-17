@@ -35,6 +35,7 @@ private:
     char const* strategy;
     uint32_t num_pipeline_commands;
     uint32_t updates_per_frame;
+    char const* flush_behavior;
     FrameTimings timing;
   };
 
@@ -42,7 +43,7 @@ private:
   void modify_pipeline_switch_frequency(Renderer& r);
   void set_flush(Renderer& r, Renderer::Flush flush);
   void start_measure_suite(); // Run a bunch of sessions with pre-defined configs
-  void start_measure_session(Renderer::RenderStrategy current_strategy);
+  void start_measure_session(Renderer::RenderStrategy current_strategy, Renderer::Flush current_flush_behavior);
   void next_measured_frame(Renderer& r);
   void finish_measure_session();
   void finish_measure_suite();

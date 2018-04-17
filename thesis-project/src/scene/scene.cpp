@@ -46,7 +46,8 @@ void Scene::update(float delta_time, Renderer& renderer) {
           pipeline_switches_ = c.num_pipeline_commands;
           modify_pipeline_switch_frequency(renderer);
           update_ratio_ = c.update_ratio;
-          start_measure_session(c.strategy);
+          set_flush(renderer, c.flush_behavior);
+          start_measure_session(c.strategy, renderer.current_flush_behavior());
         });
         suite_measure_skip_this_frame_ = true;
         current_suite_configuration_++;
@@ -180,7 +181,15 @@ void Scene::update(float delta_time, Renderer& renderer) {
         default: throw;
         }
       };
-      ImGui::Text("Configuration:\n\tStrategy: %s\n\tPipeline commands: %d\n\tUpdate ratio: %d%%", strat_to_string(), pipeline_switches_, update_ratio_);
+      auto flush_to_string = [&renderer]() -> char const* {
+        switch (renderer.current_flush_behavior()) {
+        case Renderer::Flush::Never: return "Never";
+        case Renderer::Flush::Once: return "Once";
+        case Renderer::Flush::Individual: return "Individual";
+        default: throw;
+        }
+      };
+      ImGui::Text("Configuration:\n\tStrategy: %s\n\tPipeline commands: %d\n\tUpdate ratio: %d%%\n\tFlush: %s", strat_to_string(), pipeline_switches_, update_ratio_, flush_to_string());
     }
     // If we are not measuring a suite, we might be measuring a custom config.
     else if (measuring_) {
@@ -284,7 +293,7 @@ void Scene::update(float delta_time, Renderer& renderer) {
       // Start measuring session
       {
         if (ImGui::Button("Measure this configuration")) {
-          start_measure_session(current_strategy);
+          start_measure_session(current_strategy, renderer.current_flush_behavior());
         }
 
         ImGui::SameLine();
@@ -321,7 +330,6 @@ Scene::Scene(Renderer& renderer) {
   */
 
   set_monitor_variant(MonitorVariant::Total);
-  set_flush(renderer, Renderer::Flush::Once);
 
   uint32_t entries = history_time_span_ / time_per_accumulation_;
   for (uint32_t i = 0; i < entries; ++i) {
@@ -377,7 +385,7 @@ void Scene::start_measure_suite() {
   measuring_suite_ = true;
 }
 
-void Scene::start_measure_session(Renderer::RenderStrategy current_strategy) {
+void Scene::start_measure_session(Renderer::RenderStrategy current_strategy, Renderer::Flush current_flush_behavior) {
   measuring_ = true;
 
   switch (current_strategy) {
@@ -398,6 +406,22 @@ void Scene::start_measure_session(Renderer::RenderStrategy current_strategy) {
 
   measure_session.num_pipeline_commands = static_cast<uint32_t>(pipeline_switches_);
   measure_session.updates_per_frame = g_draw_call_count / 100 * update_ratio_;
+
+  switch (current_flush_behavior) {
+  case Renderer::Flush::Never: {
+    measure_session.flush_behavior = "Never";
+    break;
+  }
+  case Renderer::Flush::Once: {
+    measure_session.flush_behavior = "Once";
+    break;
+  }
+  case Renderer::Flush::Individual: {
+    measure_session.flush_behavior = "Individual";
+    break;
+  }
+  default: throw;
+  }
 }
 
 void Scene::next_measured_frame(Renderer& r) {
@@ -474,12 +498,13 @@ void Scene::save_sessions_to_file() {
   }
 
   file << "Scene used " << g_draw_call_count << " objects. Times are in ms." << std::endl;
-  file << "strat, pipeline commands, updates per frame, average total time, average gpu time, average dgc gen. time, average traversal time" << std::endl << std::endl;
+  file << "strat, pipeline commands, updates per frame, flush behavior, average total time, average gpu time, average dgc gen. time, average traversal time" << std::endl << std::endl;
 
   for (auto& s : sessions_) {
     file << s.strategy << ", ";
     file << s.num_pipeline_commands << ", ";
     file << s.updates_per_frame << ", ";
+    file << s.flush_behavior << ", ";
     file << s.timing.total << ", ";
     file << s.timing.gpu << ", ";
     file << s.timing.dgc_generation << ", ";
