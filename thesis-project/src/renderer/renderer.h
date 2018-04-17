@@ -44,6 +44,12 @@ public:
     DGC,
   };
 
+  enum class Flush {
+    Never,
+    Once,
+    Individual,
+  };
+
 public:
   Renderer(HWND hwnd, uint32_t render_width, uint32_t render_height);
   ~Renderer();
@@ -73,6 +79,8 @@ public:
 
   void use_render_strategy(RenderStrategy strategy);
   RenderStrategy current_strategy() const;
+  void use_flush_behavior(Flush flush);
+  Flush current_flush_behavior() const;
 
 private:
   struct Vertex {
@@ -201,4 +209,5 @@ private:
 
   bool measure_session_active_ { false };
   RenderStrategy render_strategy_ { RenderStrategy::Regular };
+  Flush flush_behavior_ { Flush::Once };
 };

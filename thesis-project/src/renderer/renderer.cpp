@@ -638,6 +638,14 @@ Renderer::RenderStrategy Renderer::current_strategy() const {
   return render_strategy_;
 }
 
+void Renderer::use_flush_behavior(Flush flush) {
+  flush_behavior_ = flush;
+}
+
+Renderer::Flush Renderer::current_flush_behavior() const {
+  return flush_behavior_;
+}
+
 void Renderer::create_debug_callback() {
   VkDebugReportCallbackCreateInfoEXT callback_info {};
   callback_info.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
@@ -1224,32 +1232,58 @@ void Renderer::update_indirect_buffer(std::function<void(uint32_t job, VkPipelin
       push->actual_data = job_context.job;
     }
 
-    std::array<VkMappedMemoryRange, 3> flush_ranges {};
-    flush_ranges[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-    flush_ranges[0].pNext = nullptr;
-    flush_ranges[0].memory = indirect_buffer_->vulkan_memory_handle();
-    flush_ranges[0].offset = indirect_buffer_element * sizeof(VkDrawIndirectCommand);
-    flush_ranges[0].size = sizeof(VkDrawIndirectCommand);
+    if (flush_behavior_ == Flush::Individual) {
+      std::array<VkMappedMemoryRange, 3> flush_ranges {};
+      flush_ranges[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+      flush_ranges[0].pNext = nullptr;
+      flush_ranges[0].memory = indirect_buffer_->vulkan_memory_handle();
+      flush_ranges[0].offset = indirect_buffer_element * sizeof(VkDrawIndirectCommand);
+      flush_ranges[0].size = sizeof(VkDrawIndirectCommand);
 
-    if (dgc) {
-      flush_ranges[1].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-      flush_ranges[1].pNext = nullptr;
-      flush_ranges[1].memory = dgc_pipeline_parameters_->vulkan_memory_handle();
-      flush_ranges[1].offset = indirect_buffer_element * sizeof(uint32_t);
-      flush_ranges[1].size = sizeof(uint32_t);
-      flush_ranges[2].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-      flush_ranges[2].pNext = nullptr;
-      flush_ranges[2].memory = dgc_push_constants_->vulkan_memory_handle();
-      flush_ranges[2].offset = indirect_buffer_element * sizeof(Push);
-      flush_ranges[2].size = sizeof(Push);
+      if (dgc) {
+        flush_ranges[1].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        flush_ranges[1].pNext = nullptr;
+        flush_ranges[1].memory = dgc_pipeline_parameters_->vulkan_memory_handle();
+        flush_ranges[1].offset = indirect_buffer_element * sizeof(uint32_t);
+        flush_ranges[1].size = sizeof(uint32_t);
+        flush_ranges[2].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        flush_ranges[2].pNext = nullptr;
+        flush_ranges[2].memory = dgc_push_constants_->vulkan_memory_handle();
+        flush_ranges[2].offset = indirect_buffer_element * sizeof(Push);
+        flush_ranges[2].size = sizeof(Push);
+      }
+
+      device_->vkFlushMappedMemoryRanges(dgc ? 3 : 1, flush_ranges.data());
     }
-    
-    device_->vkFlushMappedMemoryRanges(dgc ? 3 : 1, flush_ranges.data());
 
     return reinterpret_cast<void*>(indirect_buffer_element);
   });
 
   pipeline_switch(g_draw_call_count, current_pipeline == RenderCache::Pipeline::Alpha ? pipeline_regular_mdi_solid_ : pipeline_regular_mdi_wireframe_);
+
+  if (flush_behavior_ == Flush::Once) {
+    std::array<VkMappedMemoryRange, 3> flush_ranges {};
+    flush_ranges[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+    flush_ranges[0].pNext = nullptr;
+    flush_ranges[0].memory = indirect_buffer_->vulkan_memory_handle();
+    flush_ranges[0].offset = 0;
+    flush_ranges[0].size = sizeof(VkDrawIndirectCommand) * g_draw_call_count;
+
+    if (dgc) {
+      flush_ranges[1].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+      flush_ranges[1].pNext = nullptr;
+      flush_ranges[1].memory = dgc_pipeline_parameters_->vulkan_memory_handle();
+      flush_ranges[1].offset = 0;
+      flush_ranges[1].size = sizeof(uint32_t) * g_draw_call_count;
+      flush_ranges[2].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+      flush_ranges[2].pNext = nullptr;
+      flush_ranges[2].memory = dgc_push_constants_->vulkan_memory_handle();
+      flush_ranges[2].offset = 0;
+      flush_ranges[2].size = sizeof(Push) * g_draw_call_count;
+    }
+
+    device_->vkFlushMappedMemoryRanges(dgc ? 3 : 1, flush_ranges.data());
+  }
 }
 #pragma pop_macro("max");
 
