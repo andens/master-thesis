@@ -40,6 +40,7 @@ private:
 
 private:
   void modify_pipeline_switch_frequency(Renderer& r);
+  void set_flush(Renderer& r, Renderer::Flush flush);
   void start_measure_suite(); // Run a bunch of sessions with pre-defined configs
   void start_measure_session(Renderer::RenderStrategy current_strategy);
   void next_measured_frame(Renderer& r);

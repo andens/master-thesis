@@ -260,6 +260,27 @@ void Scene::update(float delta_time, Renderer& renderer) {
         ImGui::Text("(%u / %u).", g_draw_call_count / 100 * update_ratio_, g_draw_call_count);
       }
 
+      // Flush control
+      {
+        ImGui::Text("Flush indirect draw calls");
+        ImGui::SameLine();
+        ImGui::Text("(?)");
+        if (ImGui::IsItemHovered()) {
+          ImGui::SetTooltip("How indirect calls are written to memory.\nNever: don't flush explicitly (depend on host coherency)\nOnce: flush entire buffers (even non-updated)\nIndividual: flush each draw call by itself");
+        }
+        if (ImGui::RadioButton("Never", renderer.current_flush_behavior() == Renderer::Flush::Never)) {
+          set_flush(renderer, Renderer::Flush::Never);
+        }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Once", renderer.current_flush_behavior() == Renderer::Flush::Once)) {
+          set_flush(renderer, Renderer::Flush::Once);
+        }
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Individual", renderer.current_flush_behavior() == Renderer::Flush::Individual)) {
+          set_flush(renderer, Renderer::Flush::Individual);
+        }
+      }
+
       // Start measuring session
       {
         if (ImGui::Button("Measure this configuration")) {
@@ -300,6 +321,7 @@ Scene::Scene(Renderer& renderer) {
   */
 
   set_monitor_variant(MonitorVariant::Total);
+  set_flush(renderer, Renderer::Flush::Once);
 
   uint32_t entries = history_time_span_ / time_per_accumulation_;
   for (uint32_t i = 0; i < entries; ++i) {
@@ -344,6 +366,10 @@ void Scene::modify_pipeline_switch_frequency(Renderer& r) {
       }
     }
   });
+}
+
+void Scene::set_flush(Renderer& r, Renderer::Flush flush) {
+  r.use_flush_behavior(flush);
 }
 
 void Scene::start_measure_suite() {
