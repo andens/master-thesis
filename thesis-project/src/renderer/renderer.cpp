@@ -445,7 +445,35 @@ void Renderer::render() {
   // Now that the frame has been processed, we iterate all jobs again to get an
   // idea of the traversal overhead each technique suffers.
   auto traversal_start_time = std::chrono::high_resolution_clock::now();
-  render_cache_->enumerate_all([](RenderCache::JobContext const& c) -> void* { return c.user_data; });
+  if (render_strategy_ == RenderStrategy::Regular) {
+    render_cache_->enumerate_all([](RenderCache::JobContext const& c) -> void* { return c.user_data; });
+  }
+  else {
+    // I do this because to reintroduce a branch of `update_indirect_buffers`
+    // that was not measured in the `enumerate_all` version. It had a large
+    // impact on the traversal time which falsely implied that MDI and DGC had
+    // roughly 0.25ms larger overhead than they really did. I don't like this
+    // kind of duplication, but it will have to make due.
+    RenderCache::Pipeline current_pipeline = RenderCache::Pipeline::Alpha;
+    render_cache_->enumerate_all([this, &current_pipeline](RenderCache::JobContext const& c) -> void* {
+      // We need something to do inside for the branch to not be optimized away,
+      // but we don't want to actually execute it when pipelines start to change.
+      // The extra check is to always fail without the compiler figuring it out.
+      // This seems to work.
+
+      // The most fair measuring is when `this == 0x0` is removed and we use MDI
+      // with one pipeline, which matches manual inspection. That kind of value
+      // is used for the thesis.
+      if (this == 0x0 && current_pipeline != c.pipeline) {
+        std::cout << "hejsan" << std::endl;
+      }
+      current_pipeline = c.pipeline;
+      if (c.change == RenderCache::Change::None) {
+        return c.user_data;
+      }
+      return c.user_data;
+    });
+  }
   auto traversal_end_time = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double, std::milli> traversal_duration = traversal_end_time - traversal_start_time;
   render_jobs_traversal_time_ = traversal_duration.count();
